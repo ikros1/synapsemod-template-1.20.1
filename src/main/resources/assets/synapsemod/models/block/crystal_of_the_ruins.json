@@ -1,0 +1,9 @@
+
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "bottom": "synapsemod:block/crystal_of_the_ruins_bottom",
+    "side": "synapsemod:block/crystal_of_the_ruins_side",
+    "top": "synapsemod:block/crystal_of_the_ruins_top"
+  }
+}

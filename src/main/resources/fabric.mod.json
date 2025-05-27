@@ -8,8 +8,8 @@
 		"hulaideluosi"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://www.ikaros.love",
+		"sources": "https://github.com/ikros1/synapsemod-template-1.20.1"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/synapsemod/icon.png",

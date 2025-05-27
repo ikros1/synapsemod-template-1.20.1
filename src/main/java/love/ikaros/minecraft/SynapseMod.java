@@ -1,5 +1,8 @@
 package love.ikaros.minecraft;
 
+import love.ikaros.minecraft.block.ModBlocks;
+import love.ikaros.minecraft.item.ModItemGroups;
+import love.ikaros.minecraft.item.ModItems;
 import net.fabricmc.api.ModInitializer;
 
 import org.slf4j.Logger;
@@ -19,6 +22,9 @@ public class SynapseMod implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
-		LOGGER.info("Hello Fabric world!");
+		ModItems.registerItems();
+		ModItemGroups.registerGroups();
+		ModBlocks.registerModBlocks();
+		LOGGER.info("SYNAPSE MOD INITIALIZED");
 	}
 }
