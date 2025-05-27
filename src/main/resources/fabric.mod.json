@@ -1,0 +1,44 @@
+{
+	"schemaVersion": 1,
+	"id": "synapsemod",
+	"version": "${version}",
+	"name": "SynapseMod",
+	"description": "A mod to show synapse about sorano otoshimono",
+	"authors": [
+		"hulaideluosi"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/synapsemod/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"love.ikaros.minecraft.SynapseMod"
+		],
+		"client": [
+			"love.ikaros.minecraft.SynapseModClient"
+		],
+		"fabric-datagen": [
+			"love.ikaros.minecraft.SynapseModDataGenerator"
+		]
+	},
+	"mixins": [
+		"synapsemod.mixins.json",
+		{
+			"config": "synapsemod.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.16.14",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}
