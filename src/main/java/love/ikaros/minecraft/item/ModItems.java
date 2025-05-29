@@ -8,13 +8,15 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Rarity;
 
 public class ModItems {
 
-    public static final Item COMMON_CARD = registerItems("tool/common_card",new Item(new Item.Settings()));
-    public static final Item ALMIGHTY_CARD = registerItems("tool/almighty_card",new Item(new Item.Settings()));
-    public static final Item APOLLON_ARROWS = registerItems("weapon/apollon_arrows",new TippedArrowItem(new Item.Settings()));
-    public static final Item CHRYSAOR_SWORD = registerItems("weapon/chrysaor_sword", new SwordItem(ToolMaterials.DIAMOND, 500, -0.2F, new Item.Settings()));
+    public static final Item COMMON_CARD = registerItems("tool/common_card",new Item(new Item.Settings().maxCount(1).rarity(Rarity.UNCOMMON)));
+    public static final Item ALMIGHTY_CARD = registerItems("tool/almighty_card",new Item(new Item.Settings().maxCount(1).rarity(Rarity.EPIC)));
+    public static final Item APOLLON_ARROWS = registerItems("weapon/apollon_arrows",new ArrowItem(new Item.Settings().maxCount(16).rarity(Rarity.EPIC)));
+    public static final Item CHRYSAOR_SWORD = registerItems("weapon/chrysaor_sword", new SwordItem(ToolMaterials.DIAMOND, 800, -0.2F, new Item.Settings().rarity(Rarity.EPIC)));
+    public static final Item APOLLON = registerItems("weapon/apollon", new ModBowItem(new Item.Settings().maxDamage(38400).rarity(Rarity.EPIC)));
 
 
     public static Item registerItems(String id,Item item) {
@@ -33,6 +35,7 @@ public class ModItems {
 
         entries.add(APOLLON_ARROWS);
         entries.add(CHRYSAOR_SWORD);
+        entries.add(APOLLON);
     }
     public static void registerItems(){
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(ModItems::addItemToToolItemGroup);

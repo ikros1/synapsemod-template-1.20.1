@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "group": "synapse_weapon_apollon_arrows",
+  "key": {
+    "#": {
+      "item": "minecraft:obsidian"
+    },
+    "*": {
+      "item": "minecraft:feather"
+    },
+    "z": {
+      "item":"minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "  #",
+    " z ",
+    "*  "
+  ],
+  "result": {
+    "item": "synapsemod:weapon/apollon_arrows"
+  },
+  "show_notification": true
+}

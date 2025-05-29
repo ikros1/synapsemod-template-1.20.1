@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "group": "synapse_weapon_chrysaor_sword",
+  "key": {
+    "#": {
+      "item": "synapsemod:tool/almighty_card"
+    }
+  },
+  "pattern": [
+    "  #",
+    " # ",
+    "#  "
+  ],
+  "result": {
+    "item": "synapsemod:weapon/chrysaor_sword"
+  },
+  "show_notification": true
+}

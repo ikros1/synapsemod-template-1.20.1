@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "synapse_tool_almighty_card",
+  "key": {
+    "#": {
+      "item": "synapsemod:tool/common_card"
+    },
+    "*": {
+      "item": "minecraft:feather"
+    },
+    "z": {
+      "item": "minecraft:diamond_block"
+    }
+  },
+  "pattern": [
+    "#*#",
+    "#z#",
+    "#*#"
+  ],
+  "result": {
+    "item": "synapsemod:tool/almighty_card"
+  },
+  "show_notification": true
+}

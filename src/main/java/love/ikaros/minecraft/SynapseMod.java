@@ -25,6 +25,7 @@ public class SynapseMod implements ModInitializer {
 		ModItems.registerItems();
 		ModItemGroups.registerGroups();
 		ModBlocks.registerModBlocks();
+
 		LOGGER.info("SYNAPSE MOD INITIALIZED");
 	}
 }

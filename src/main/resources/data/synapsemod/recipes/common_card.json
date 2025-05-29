@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "synapse_tool_common_card",
+  "key": {
+    "#": {
+      "item": "synapsemod:crystal_of_the_ruins"
+    },
+    "*": {
+      "item": "minecraft:feather"
+    },
+    "z": {
+      "item": "minecraft:obsidian"
+    }
+  },
+  "pattern": [
+    "#*#",
+    "#z#",
+    "#*#"
+  ],
+  "result": {
+    "item": "synapsemod:tool/common_card"
+  },
+  "show_notification": true
+}

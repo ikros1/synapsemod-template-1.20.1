@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "synapse_crystal_of_the_ruins",
+  "key": {
+    "#": {
+      "item": "minecraft:netherite_block"
+    }
+  },
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "result": {
+    "item": "synapsemod:crystal_of_the_ruins"
+  },
+  "show_notification": true
+}

@@ -1,9 +1,9 @@
 {
   "item.synapsemod.tool.common_card": "Common Card",
   "item.synapsemod.tool.almighty_card": "Almighty Card",
-  "item.synapsemod.weapon.apollon_arrows.effect.empty": "Apollon Arrows",
+  "item.synapsemod.weapon.apollon_arrows": "Apollon Arrows",
   "item.synapsemod.weapon.chrysaor_sword": "Chrysaor Sword",
   "itemGroup.synapse_group": "Synapse Group",
   "block.synapsemod.crystal_of_the_ruins": "Crystal of the Ruins",
-  "item.synapsemod.weapon.apollon_arrows.effect.harming": "Apollon Arrows of Harming"
+  "item.synapsemod.weapon.apollon": "Apollon"
 }

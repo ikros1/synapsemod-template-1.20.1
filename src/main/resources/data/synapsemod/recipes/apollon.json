@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "group": "synapse_weapon_apollon",
+  "key": {
+    "#": {
+      "item": "synapsemod:tool/almighty_card"
+    }
+  },
+  "pattern": [
+    " ##",
+    "# #",
+    " ##"
+  ],
+  "result": {
+    "item": "synapsemod:weapon/apollon"
+  },
+  "show_notification": true
+}

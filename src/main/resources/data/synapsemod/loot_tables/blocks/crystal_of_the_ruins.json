@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "synapsemod:crystal_of_the_ruins"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "synapsemod:blocks/crystal_of_the_ruins"
+}

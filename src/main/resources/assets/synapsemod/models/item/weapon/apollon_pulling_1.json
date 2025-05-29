@@ -1,0 +1,6 @@
+{
+  "parent": "synapsemod:item/weapon/apollon",
+  "textures": {
+    "layer0": "synapsemod:item/weapon/apollon_pulling_1"
+  }
+}
