@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
+import love.ikaros.minecraft.entity.ModTntEntity;
+import love.ikaros.minecraft.sound.ModSoundEvents;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.LivingEntity;
@@ -26,7 +28,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class ModBowItem extends RangedWeaponItem implements Vanishable {
     public static final int TICKS_PER_SECOND = 20;
-    public static final int RANGE = 40;
+    public static final int RANGE = 20;
 
     public ModBowItem(Item.Settings settings) {
         super(settings);
@@ -51,7 +53,7 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
                     if (!world.isClient) {
                         ArrowItem arrowItem = (ArrowItem)(itemStack.getItem() instanceof ArrowItem ? itemStack.getItem() : Items.ARROW);
                         PersistentProjectileEntity persistentProjectileEntity =  arrowItem.createArrow(world, itemStack, playerEntity);
-                        persistentProjectileEntity.setVelocity(playerEntity, playerEntity.getPitch(), playerEntity.getYaw(), 0.0F, f * 300.0F, 1.0F);
+                        persistentProjectileEntity.setVelocity(playerEntity, playerEntity.getPitch(), playerEntity.getYaw(), 0.0F, f * 400.0F, 1.0F);
                         if (f == 1.0F) {
                             persistentProjectileEntity.setCritical(true);
                         }
@@ -76,8 +78,6 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
                         }
 
                         world.spawnEntity(persistentProjectileEntity);
-                        int maxTnt = Float.valueOf(80*f-20).intValue();
-                        maxTnt = Math.max(maxTnt, 0);
                         int maxTime = 10;
                         posStart = persistentProjectileEntity.getBlockPos();
                         while (!persistentProjectileEntity.isNoClip()&&maxTime>0) {
@@ -86,127 +86,79 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
                             int y =Double.valueOf(vec3d.getY()).intValue();
                             int z =Double.valueOf(vec3d.getZ()).intValue();
                             posEnd = new BlockPos(x, y, z);
+                            //System.out.println(posEnd);
                             persistentProjectileEntity.tick();
                             maxTime--;
                         }
-                        if(f<1.0F){
-                            while (maxTnt>0) {
-                                primeTnt(world,posEnd,playerEntity);
-                                maxTnt--;
-                            }
+
+                        if(0.2F<f&&f<0.5F){
+                            primeTnt(world,posEnd,playerEntity);
                         }
-                        if(f==1.0F){
-                            int startX = posStart.getX();
-                            int startY = posStart.getY();
-                            int startZ = posStart.getZ();
-                            int endX = posEnd.getX();
-                            int endY = posEnd.getY();
-                            int endZ = posEnd.getZ();
+                        if(f>=0.5F){
+                            // 计算方向向量（从起点到终点）
+                            Vec3d direction = new Vec3d(
+                                    posEnd.getX() - posStart.getX(),
+                                    posEnd.getY() - posStart.getY(),
+                                    posEnd.getZ() - posStart.getZ()
+                            ).normalize();
 
-                            double vecX = endX - startX;
-                            double vecY = endY - startY;
-                            double vecZ = endZ - startZ;
+                            // 设置参数
+                            double step = 10.0;   // 每个爆炸点的间隔
+                            int safeDistance = 22; // 安全距离
+                            int maxCount = 20;     // 最大爆炸点数
 
-                            double length = Math.sqrt(vecX*vecX + vecY*vecY + vecZ*vecZ);
-                            if(length > 0.001) { // 防止零向量
-                                vecX /= length;
-                                vecY /= length;
-                                vecZ /= length;
-                            } else { // 若原路径是零向量，默认向上方延长
-                                vecY = 1.0;
+                            // 从起点偏移安全距离开始（加0.5让坐标居中）
+                            Vec3d currentPos = new Vec3d(
+                                    posStart.getX() + 0.5 + direction.x * safeDistance,
+                                    posStart.getY() + 0.5 + direction.y * safeDistance,
+                                    posStart.getZ() + 0.5 + direction.z * safeDistance
+                            );
+
+                            int spawned = 0;
+                            while(spawned < maxCount){
+                                // 生成TNT
+                                primeTnt(world, new BlockPos(
+                                        (int)Math.floor(currentPos.x),
+                                        (int)Math.floor(currentPos.y),
+                                        (int)Math.floor(currentPos.z)
+                                ), playerEntity);
+
+                                // 向下个位置移动
+                                currentPos = currentPos.add(direction.multiply(step));
+                                spawned++;
+
+                                // 射程保护（RANGE=40时最大800格）
+                                if(currentPos.distanceTo(Vec3d.of(posStart)) > 40*(f-0.5) * step) break;
                             }
-
-                            int extendedEndX = endX + (int)(vecX * 100);
-                            int extendedEndY = endY + (int)(vecY * 100);
-                            int extendedEndZ = endZ + (int)(vecZ * 100);
-                            int dx = extendedEndX - startX;
-                            int dy = extendedEndY - startY;
-                            int dz = extendedEndZ - startZ;
-
-// 计算方向向量
-                            double dirLength = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                            double dirX = dx/dirLength;
-                            double dirY = dy/dirLength;
-                            double dirZ = dz/dirLength;
-
-// 计算垂直方向向量（右方向）
-                            double rightX = -dirZ;
-                            double rightY = 0;
-                            double rightZ = dirX;
-                            double rightLength = Math.sqrt(rightX*rightX + rightZ*rightZ);
-                            if(rightLength > 0.001) {
-                                rightX /= rightLength;
-                                rightZ /= rightLength;
-                            } else {
-                                rightX = 1;
-                                rightZ = 0;
-                            }
-
-// 计算上方向向量
-                            double upX = dirY*rightZ - dirZ*0;
-                            double upY = dirZ*rightX - dirX*rightZ;
-                            double upZ = dirX*0 - dirY*rightX;
-                            double upLength = Math.sqrt(upX*upX + upY*upY + upZ*upZ);
-                            if(upLength > 0.001) {
-                                upX /= upLength;
-                                upY /= upLength;
-                                upZ /= upLength;
-                            } else {
-                                upY = 1;
-                            }
-
-// 设置偏移距离为2
-                            double offset = 7.0;
-                            double rightOffsetX = rightX * offset;
-                            double rightOffsetZ = rightZ * offset;
-                            double upOffsetX = upX * offset;
-                            double upOffsetY = upY * offset;
-                            double upOffsetZ = upZ * offset;
-
-                            List<BlockPos> validPosList = new ArrayList<>();
-                            int samplePoints = Math.min(1000, Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz))) * 3);
-
-                            for(int q=0; q<=samplePoints; q++){
-                                float t = q/(float)samplePoints;
-                                int x = (int)(startX + dx * t);
-                                int y = (int)(startY + dy * t);
-                                int z = (int)(startZ + dz * t);
-                                BlockPos currentPos = new BlockPos(x,y,z);
-
-                                // 保留重要距离判断！新增四方向点也要判断！
-                                int manhattanDist = Math.abs(x-startX)+Math.abs(y-startY)+Math.abs(z-startZ);
-
-                                if(manhattanDist > 4*3){
-                                    if(validPosList.isEmpty() || !currentPos.equals(validPosList.get(validPosList.size()-1))){
-                                        // 添加主路径点
-                                        validPosList.add(currentPos);
-
-                                        // 添加四个方向的爆炸点（每个都要判断距离）
-                                        addOffsetPointWithCheck(validPosList, currentPos, startX, startY, startZ, rightOffsetX, 0, rightOffsetZ);
-                                        addOffsetPointWithCheck(validPosList, currentPos, startX, startY, startZ, -rightOffsetX, 0, -rightOffsetZ);
-                                        addOffsetPointWithCheck(validPosList, currentPos, startX, startY, startZ, upOffsetX, upOffsetY, upOffsetZ);
-                                        addOffsetPointWithCheck(validPosList, currentPos, startX, startY, startZ, -upOffsetX, -upOffsetY, -upOffsetZ);
-                                    }
-                                }
-                            }
-
-                            int explosionInterval = 1;
-                            for(int q=0; q<validPosList.size(); q+=explosionInterval){
-                                primeTnt(world, validPosList.get(q), playerEntity);
-                            }
+                            //System.out.println("zui hou"+posEnd);
+                            primeMaxTnt(world,posEnd,playerEntity);
                         }
                     }
+                    if(f==1.0F){
+                        world.playSound(
+                                null,
+                                playerEntity.getX(),
+                                playerEntity.getY(),
+                                playerEntity.getZ(),
+                                ModSoundEvents.APOLLON_ARROW_SHOOT,
+                                SoundCategory.PLAYERS,
+                                1.0F,
+                                1.0F / (world.getRandom().nextFloat() * 0.4F + 1.2F) + f * 0.5F
+                        );
+                    }else {
+                        world.playSound(
+                                null,
+                                playerEntity.getX(),
+                                playerEntity.getY(),
+                                playerEntity.getZ(),
+                                SoundEvents.ENTITY_ARROW_SHOOT,
+                                SoundCategory.PLAYERS,
+                                1.0F,
+                                1.0F / (world.getRandom().nextFloat() * 0.4F + 1.2F) + f * 0.5F
+                        );
+                    }
 
-                    world.playSound(
-                            null,
-                            playerEntity.getX(),
-                            playerEntity.getY(),
-                            playerEntity.getZ(),
-                            SoundEvents.ENTITY_ARROW_SHOOT,
-                            SoundCategory.PLAYERS,
-                            1.0F,
-                            1.0F / (world.getRandom().nextFloat() * 0.4F + 1.2F) + f * 0.5F
-                    );
+
                     if (!bl2 && !playerEntity.getAbilities().creativeMode) {
                         itemStack.decrement(1);
                         if (itemStack.isEmpty()) {
@@ -220,29 +172,8 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
         }
     }
 
-    // 辅助方法：添加偏移点并去重
-    private void addOffsetPointWithCheck(List<BlockPos> list, BlockPos base,
-                                         int startX, int startY, int startZ,
-                                         double dx, double dy, double dz) {
-        BlockPos newPos = new BlockPos(
-                base.getX() + (int)Math.round(dx),
-                base.getY() + (int)Math.round(dy),
-                base.getZ() + (int)Math.round(dz)
-        );
-
-        // 计算新点的曼哈顿距离
-        int manhattanDist = Math.abs(newPos.getX()-startX)
-                + Math.abs(newPos.getY()-startY)
-                + Math.abs(newPos.getZ()-startZ);
-
-        // 必须满足距离条件才添加
-        if(manhattanDist > 6*3 && !list.contains(newPos)) {
-            list.add(newPos);
-        }
-    }
-
     public static float getPullProgress(int useTicks) {
-        float f = useTicks / 20.0F;
+        float f = useTicks / 40.0F;
         f = (f * f + f * 2.0F) / 3.0F;
         if (f > 1.0F) {
             f = 1.0F;
@@ -264,6 +195,11 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack itemStack = user.getStackInHand(hand);
         ItemStack offHandItemStack = user.getStackInHand(Hand.OFF_HAND);
+
+        user.playSound(SoundEvents.ITEM_SPYGLASS_USE, 1.0F, 1.0F);
+
+        // user.incrementStat(Stats.USED.getOrCreateStat(this));
+
         //boolean bl = !getProjectileType(itemStack,user).isEmpty();
         if (!user.getAbilities().creativeMode && !offHandItemStack.isOf(ModItems.APOLLON_ARROWS)) {
             //System.out.println("fen1");
@@ -285,12 +221,21 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
         return 40;
     }
 
+    private static void primeMaxTnt(World world, BlockPos pos, @Nullable LivingEntity igniter) {
+        if (!world.isClient) {
+            ModTntEntity tntEntity = new ModTntEntity(world, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, igniter);
+            tntEntity.setFuse(1);
+            tntEntity.power = 50;
+            world.spawnEntity(tntEntity);
+            world.emitGameEvent(igniter, GameEvent.PRIME_FUSE, pos);
+        }
+    }
+
     private static void primeTnt(World world, BlockPos pos, @Nullable LivingEntity igniter) {
         if (!world.isClient) {
-            TntEntity tntEntity = new TntEntity(world, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, igniter);
+            ModTntEntity tntEntity = new ModTntEntity(world, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, igniter);
             tntEntity.setFuse(1);
             world.spawnEntity(tntEntity);
-            world.playSound(null, tntEntity.getX(), tntEntity.getY(), tntEntity.getZ(), SoundEvents.ENTITY_TNT_PRIMED, SoundCategory.BLOCKS, 1.0F, 1.0F);
             world.emitGameEvent(igniter, GameEvent.PRIME_FUSE, pos);
         }
     }

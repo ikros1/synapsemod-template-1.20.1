@@ -3,6 +3,7 @@ package love.ikaros.minecraft;
 import love.ikaros.minecraft.block.ModBlocks;
 import love.ikaros.minecraft.item.ModItemGroups;
 import love.ikaros.minecraft.item.ModItems;
+import love.ikaros.minecraft.sound.ModSoundEvents;
 import net.fabricmc.api.ModInitializer;
 
 import org.slf4j.Logger;
@@ -25,6 +26,7 @@ public class SynapseMod implements ModInitializer {
 		ModItems.registerItems();
 		ModItemGroups.registerGroups();
 		ModBlocks.registerModBlocks();
+		ModSoundEvents.registerSounds();
 
 		LOGGER.info("SYNAPSE MOD INITIALIZED");
 	}

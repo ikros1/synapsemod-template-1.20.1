@@ -5,5 +5,6 @@
   "item.synapsemod.weapon.chrysaor_sword": "Chrysaor Sword",
   "itemGroup.synapse_group": "Synapse Group",
   "block.synapsemod.crystal_of_the_ruins": "Crystal of the Ruins",
-  "item.synapsemod.weapon.apollon": "Apollon"
+  "item.synapsemod.weapon.apollon": "Apollon",
+  "sounds.synapsemod.apollon_arrow_shoot": "Apollon shoot"
 }

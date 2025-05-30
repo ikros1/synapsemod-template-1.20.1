@@ -5,5 +5,6 @@
   "item.synapsemod.weapon.chrysaor_sword": "振动光子刀",
   "itemGroup.synapse_group": "西纳普斯物品",
   "block.synapsemod.crystal_of_the_ruins": "遗迹水晶",
-  "item.synapsemod.weapon.apollon": "阿波罗"
+  "item.synapsemod.weapon.apollon": "阿波罗",
+  "sounds.synapsemod.apollon_arrow_shoot": "阿波罗发射"
 }
