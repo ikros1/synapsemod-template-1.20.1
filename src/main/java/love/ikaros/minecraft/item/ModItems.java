@@ -3,6 +3,8 @@ package love.ikaros.minecraft.item;
 import love.ikaros.minecraft.SynapseMod;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroupEntries;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.*;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
@@ -13,7 +15,24 @@ import net.minecraft.util.Rarity;
 public class ModItems {
 
     public static final Item COMMON_CARD = registerItems("tool/common_card",new Item(new Item.Settings().rarity(Rarity.UNCOMMON)));
-    public static final Item ALMIGHTY_CARD = registerItems("tool/almighty_card",new Item(new Item.Settings().rarity(Rarity.EPIC)));
+    public static final Item ALMIGHTY_CARD = registerItems("tool/almighty_card",new Item(new Item.Settings().rarity(Rarity.RARE).food(new FoodComponent.Builder()
+            .hunger(10)
+            .saturationModifier(100.2F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 24000, 8), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.ABSORPTION, 24000, 64), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.SPEED, 24000, 64), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.JUMP_BOOST, 24000, 64), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 24000, 4), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 24000, 4), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.FIRE_RESISTANCE, 24000, 4), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.NIGHT_VISION, 24000, 4), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.WATER_BREATHING, 24000, 64), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.LUCK, 24000, 1024), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.DOLPHINS_GRACE, 24000, 64), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.HASTE, 24000, 64), 1.0F)
+            .statusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 24000, 64), 1.0F)
+            .alwaysEdible()
+            .build())));
     public static final Item APOLLON_ARROWS = registerItems("weapon/apollon_arrows",new ArrowItem(new Item.Settings().rarity(Rarity.EPIC)));
     public static final Item CHRYSAOR_SWORD = registerItems("weapon/chrysaor_sword", new SwordItem(ToolMaterials.DIAMOND, 800, -0.2F, new Item.Settings().rarity(Rarity.EPIC)));
     public static final Item APOLLON = registerItems("weapon/apollon", new ModBowItem(new Item.Settings().maxDamage(38400).rarity(Rarity.EPIC)));
