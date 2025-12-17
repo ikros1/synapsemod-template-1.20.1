@@ -10,6 +10,10 @@ import net.minecraft.registry.Registry;
 public class ModSoundEvents {
 
     public static final SoundEvent APOLLON_ARROW_SHOOT = register("apollon_arrow_shoot");
+    public static final SoundEvent HIYOLI_WAND_SET = register("hiyoli_wand_set");
+    public static final SoundEvent HIYOLI_WAND_USE = register("hiyoli_wand_use");
+    public static final SoundEvent NYMPH_WAND_USE = register("nymph_wand_use");
+    public static final SoundEvent NYMPH_WAND_SET = register("nymph_wand_set");
 
     public static void registerSounds(){
 

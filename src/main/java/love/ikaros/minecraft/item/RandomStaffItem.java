@@ -1,5 +1,6 @@
 package love.ikaros.minecraft.item;
 
+import love.ikaros.minecraft.sound.ModSoundEvents;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
@@ -59,12 +60,14 @@ public class RandomStaffItem extends Item {
         IS_RECORDING.set(true);
         recordCenter = center;
 
-        final int radius =70;
+        final int radius = 70;
         final int totalLayers = (radius * 2) + 1;
         AtomicInteger completedLayers = new AtomicInteger(0);
         List<NbtCompound> collectedEntries = Collections.synchronizedList(new ArrayList<>());
 
         player.sendMessage(Text.of("§b[系统] 开始时空记录..."), false);
+        world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                ModSoundEvents.HIYOLI_WAND_SET, SoundCategory.PLAYERS, 10.0F, 1F);
 
         CompletableFuture.runAsync(() -> {
             List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -112,73 +115,77 @@ public class RandomStaffItem extends Item {
             double baseY = recordCenter.getY();
             double cz = recordCenter.getZ() + 0.5;
 
-            // 圣十字架参数
-            double totalHeight = 15.0;
-            double thickness = 0.3; // 半径，即宽度为0.6
-            double armY = 10.0;     // 横梁所在高度
-            double armLength = 4.0; // 横梁单侧长度
+            // --- 十字架结构参数 (基于触发点向上) ---
+            double totalHeight = 40.0;    // 总高度
+            double halfWidth = 2.0;       // 截面半径为2，总宽4
+            double armYCenter = 28.0;     // 横梁中心点的高度
+            double armHalfHeight = 2.0;   // 横梁半高
+            double armLength = 15.0;      // 横梁从中心向单侧延伸的长度
 
-            // 1. 绘制竖向立柱的 4 条棱 (垂直线)
-            drawVerticalLine(world, cx - thickness, cz - thickness, baseY, totalHeight);
-            drawVerticalLine(world, cx + thickness, cz - thickness, baseY, totalHeight);
-            drawVerticalLine(world, cx - thickness, cz + thickness, baseY, totalHeight);
-            drawVerticalLine(world, cx + thickness, cz + thickness, baseY, totalHeight);
+            // 1. 绘制垂直主柱 (4x4 截面轮廓)
+            // 采用步长 0.8 减少粒子堆积，防止超过客户端渲染上限
+            for (double y = 0; y <= totalHeight; y += 0.8) {
+                // 绘制立柱的 4 条主棱边
+                spawnThickParticle(world, cx - halfWidth, baseY + y, cz - halfWidth);
+                spawnThickParticle(world, cx + halfWidth, baseY + y, cz - halfWidth);
+                spawnThickParticle(world, cx - halfWidth, baseY + y, cz + halfWidth);
+                spawnThickParticle(world, cx + halfWidth, baseY + y, cz + halfWidth);
 
-            // 2. 绘制竖向立柱的顶部和底部方框 (水平线)
-            drawRect(world, cx, cz, baseY, thickness, thickness);
-            drawRect(world, cx, cz, baseY + totalHeight, thickness, thickness);
+                // 每隔 4 格画一个横向加固框，增强体积感
+                if (y % 4 == 0) {
+                    drawRectFrame(world, cx, cz, baseY + y, halfWidth, halfWidth);
+                }
+            }
 
-            // 3. 绘制横梁框架 (沿 X 轴延伸)
-            // 横梁的 4 条长棱
-            drawHorizontalLineX(world, cx - armLength, cx + armLength, armY - thickness, cz - thickness);
-            drawHorizontalLineX(world, cx - armLength, cx + armLength, armY + thickness, cz - thickness);
-            drawHorizontalLineX(world, cx - armLength, cx + armLength, armY - thickness, cz + thickness);
-            drawHorizontalLineX(world, cx - armLength, cx + armLength, armY + thickness, cz + thickness);
+            // 2. 绘制横梁 (4x4 截面轮廓)
+            // 绘制横梁的四个水平长棱
+            for (double xOff = -armLength; xOff <= armLength; xOff += 0.8) {
+                // 跳过主柱重叠区域以优化性能
+                if (Math.abs(xOff) > halfWidth) {
+                    double yTop = baseY + armYCenter + armHalfHeight;
+                    double yBottom = baseY + armYCenter - armHalfHeight;
 
-            // 横梁两端的方框封口
-            drawRectSide(world, cx - armLength, armY, cz, thickness);
-            drawRectSide(world, cx + armLength, armY, cz, thickness);
+                    spawnThickParticle(world, cx + xOff, yTop, cz - halfWidth);
+                    spawnThickParticle(world, cx + xOff, yTop, cz + halfWidth);
+                    spawnThickParticle(world, cx + xOff, yBottom, cz - halfWidth);
+                    spawnThickParticle(world, cx + xOff, yBottom, cz + halfWidth);
 
-            // 4. 交叉点发光增强 (核心位置)
-            if (world.random.nextFloat() > 0.7f) {
-                world.addParticle(ParticleTypes.GLOW, cx, baseY + armY, cz, 0, 0.1, 0);
+                    // 横梁末端封口
+                    if (Math.abs(xOff) >= armLength - 0.5) {
+                        drawRectFrame(world, cx + xOff, cz, baseY + armYCenter, halfWidth, halfWidth);
+                    }
+                }
+            }
+
+            // 3. 核心交汇处强化特效
+            if (world.random.nextFloat() > 0.6f) {
+                world.addParticle(ParticleTypes.FLASH, cx, baseY + armYCenter, cz, 0, 0, 0);
             }
         }
     }
 
-    // --- 粒子绘制工具方法 ---
-
-    // 绘制垂直线
-    private void drawVerticalLine(World world, double x, double z, double startY, double height) {
-        for (double y = 0; y <= height; y += 0.4) {
-            world.addParticle(ParticleTypes.END_ROD, x, startY + y, z, 0, 0, 0);
+    /**
+     * 在指定 Y 高度绘制一个 4x4 的水平矩形框
+     */
+    private void drawRectFrame(World world, double cx, double cz, double y, double rx, double rz) {
+        for (double i = -rx; i <= rx; i += 1.0) {
+            spawnThickParticle(world, cx + i, y, cz - rz);
+            spawnThickParticle(world, cx + i, y, cz + rz);
+            spawnThickParticle(world, cx - rx, y, cz + i);
+            spawnThickParticle(world, cx + rx, y, cz + i);
         }
     }
 
-    // 绘制 X 轴水平线
-    private void drawHorizontalLineX(World world, double startX, double endX, double y, double z) {
-        for (double x = startX; x <= endX; x += 0.4) {
-            world.addParticle(ParticleTypes.END_ROD, x, y, z, 0, 0, 0);
-        }
-    }
+    /**
+     * 粒子生成核心：使用 END_ROD 构筑形状，SOUL_FIRE_FLAME 增加亮度并延长视觉停留
+     */
+    private void spawnThickParticle(World world, double x, double y, double z) {
+        // 基础形状粒子
+        world.addParticle(ParticleTypes.END_ROD, x, y, z, 0, 0, 0);
 
-    // 绘制水平面的矩形框 (用于立柱顶底)
-    private void drawRect(World world, double cx, double cz, double y, double tx, double tz) {
-        for (double i = -tx; i <= tx; i += 0.2) {
-            world.addParticle(ParticleTypes.END_ROD, cx + i, y, cz - tz, 0, 0, 0);
-            world.addParticle(ParticleTypes.END_ROD, cx + i, y, cz + tz, 0, 0, 0);
-            world.addParticle(ParticleTypes.END_ROD, cx - tx, y, cz + i, 0, 0, 0);
-            world.addParticle(ParticleTypes.END_ROD, cx + tx, y, cz + i, 0, 0, 0);
-        }
-    }
-
-    // 绘制垂直面的矩形框 (用于横梁两端封口)
-    private void drawRectSide(World world, double x, double cy, double cz, double t) {
-        for (double i = -t; i <= t; i += 0.2) {
-            world.addParticle(ParticleTypes.END_ROD, x, cy + i, cz - t, 0, 0, 0);
-            world.addParticle(ParticleTypes.END_ROD, x, cy + i, cz + t, 0, 0, 0);
-            world.addParticle(ParticleTypes.END_ROD, x, cy - t, cz + i, 0, 0, 0);
-            world.addParticle(ParticleTypes.END_ROD, x, cy + t, cz + i, 0, 0, 0);
+        // 灵魂火粒子：停留时间长，且有微弱的升腾感
+        if (world.random.nextFloat() > 0.90f) {
+            world.addParticle(ParticleTypes.SOUL_FIRE_FLAME, x, y, z, 0, 0.01, 0);
         }
     }
 
@@ -199,10 +206,7 @@ public class RandomStaffItem extends Item {
     public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {
         if (!world.isClient && user instanceof PlayerEntity player && !IS_RECORDING.get()) {
             int usedTicks = this.getMaxUseTime(stack) - remainingUseTicks;
-            // 进度 0.0 ~ 1.0
             float progress = MathHelper.clamp(usedTicks / 200.0F, 0.0F, 1.0F);
-
-            // 蓄力越久，触发频率越快
             int currentInterval = (int) MathHelper.lerp(progress, 20.0F, 2.0F);
 
             if (usedTicks % currentInterval == 0) {
@@ -211,31 +215,39 @@ public class RandomStaffItem extends Item {
         }
     }
 
-    /**
-     * 动态还原：边长随蓄力时间从 5 增加到 20
-     */
     private void performDynamicRestore(World world, PlayerEntity player, float progress) {
         if (cachedData.isEmpty()) loadCacheFromFile();
         if (cachedData.isEmpty()) return;
 
-        // 计算当前半径：从 2 (边长5) 到 10 (边长20)
-        int currentRadius = (int) MathHelper.lerp(progress, 2.0F, 10.0F);
+        ItemStack stack = player.getMainHandStack();
+        // 确保扣除的是法杖本身（防止玩家在蓄力过程中切换手持物）
+        if (!(stack.getItem() instanceof RandomStaffItem)) {
+            stack = player.getOffHandStack();
+        }
 
+        if (stack.getItem() instanceof RandomStaffItem) {
+            // 每次执行回溯扣除 1 点耐久
+            // 参数说明：扣除数量，随机源，执行扣除的玩家（用于触发损毁效果）
+            stack.damage(1, player, (p) -> p.sendToolBreakStatus(player.getActiveHand()));
+
+            // 如果耐久用完了，停止后续逻辑（damage方法会自动销毁物品，这里做个保险）
+            if (stack.getDamage() >= stack.getMaxDamage()) {
+                player.sendMessage(Text.of("§c[警告] 法杖能量已耗尽！"), true);
+                return;
+            }
+        }
+
+        int currentRadius = (int) MathHelper.lerp(progress, 2.0F, 10.0F);
         List<BlockPos> keys = new ArrayList<>(cachedData.keySet());
         BlockPos origin = keys.get(world.random.nextInt(keys.size()));
 
-        // 执行立方体还原
         for (int x = -currentRadius; x <= currentRadius; x++) {
             for (int y = -currentRadius; y <= currentRadius; y++) {
                 for (int z = -currentRadius; z <= currentRadius; z++) {
                     BlockPos target = origin.add(x, y, z);
                     BlockState saved = cachedData.get(target);
-
                     if (world.isInBuildLimit(target)) {
-                        // 如果记录中有则还原，没有则设为空气（实现完全回溯）
                         BlockState toPlace = (saved != null) ? saved : Blocks.AIR.getDefaultState();
-
-                        // 性能优化：如果当前方块已经是目标方块，则跳过，减少不必要的包发送
                         if (world.getBlockState(target) != toPlace) {
                             world.setBlockState(target, toPlace);
                         }
@@ -243,13 +255,9 @@ public class RandomStaffItem extends Item {
                 }
             }
         }
-
-        // 提示当前回溯规模
-        int sideLength = (currentRadius * 2) + 1;
-        player.sendMessage(Text.of("§d回溯场规模: §f" + sideLength + "x" + sideLength + "x" + sideLength), true);
-
+        player.sendMessage(Text.of("§d回溯场规模: §f" + ((currentRadius * 2) + 1)), true);
         world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 4.0F, 0.5F + (progress * 1.5F));
+                ModSoundEvents.HIYOLI_WAND_USE, SoundCategory.PLAYERS, 4.0F, 1F);
     }
 
     private void loadCacheFromFile() {

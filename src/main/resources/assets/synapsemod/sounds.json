@@ -4,5 +4,23 @@
     "sounds": [
       "synapsemod:apollon_arrow_shoot"
     ]
+  },
+  "hiyoli_wand_set": {
+    "subtitle": "sounds.synapsemod.hiyoli_wand_set",
+    "sounds": [
+      "synapsemod:hiyoli_wand_set"
+    ]
+  },
+  "hiyoli_wand_use": {
+    "subtitle": "sounds.synapsemod.hiyoli_wand_use",
+    "sounds": [
+      "synapsemod:hiyoli_wand_use"
+    ]
+  },
+  "nymph_wand_use": {
+    "subtitle": "sounds.synapsemod.nymph_wand_use",
+    "sounds": [
+      "synapsemod:nymph_wand_use"
+    ]
   }
 }

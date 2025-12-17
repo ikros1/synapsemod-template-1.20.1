@@ -38,7 +38,19 @@ public class ModItems {
     public static final Item APOLLON = registerItems("weapon/apollon", new ModBowItem(new Item.Settings().maxDamage(38400).rarity(Rarity.EPIC)));
 
     // 补全法杖定义，设置稀有度为史诗
-    public static final Item HIYOLI_WAND = registerItems("weapon/hiyoli_wand", new RandomStaffItem(new Item.Settings().rarity(Rarity.EPIC).maxCount(1)));
+    public static final Item HIYOLI_WAND = registerItems("weapon/hiyoli_wand",
+            new RandomStaffItem(new Item.Settings()
+                    .rarity(Rarity.EPIC)
+                    .maxCount(1)
+                    .maxDamage(500)
+            ));
+
+    public static final Item NYMPH_WAND = registerItems("weapon/nymph_wand",
+            new SphereChaosStaffItem(new Item.Settings()
+                    .rarity(Rarity.EPIC)
+                    .maxCount(1)
+                    .maxDamage(500)
+            ));
 
     public static Item registerItems(String id, Item item) {
         return Registry.register(Registries.ITEM, RegistryKey.of(Registries.ITEM.getKey(), new Identifier(SynapseMod.MOD_ID, id)), item);
@@ -53,7 +65,8 @@ public class ModItems {
         entries.add(APOLLON_ARROWS);
         entries.add(CHRYSAOR_SWORD);
         entries.add(APOLLON);
-        entries.add(HIYOLI_WAND); // 注册到战斗物品栏
+        entries.add(HIYOLI_WAND);
+        entries.add(NYMPH_WAND);
     }
 
     public static void registerItems(){
