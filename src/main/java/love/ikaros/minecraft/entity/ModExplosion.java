@@ -314,20 +314,20 @@ public class ModExplosion extends Explosion {
                 if (!blockState.isAir()) {
                     BlockPos blockPos2 = blockPos.toImmutable();
                     this.world.getProfiler().push("explosion_blocks");
-                    if (block.shouldDropItemsOnExplosion(this) && this.world instanceof ServerWorld serverWorld) {
-                        BlockEntity blockEntity = blockState.hasBlockEntity() ? this.world.getBlockEntity(blockPos) : null;
-                        LootContextParameterSet.Builder builder = new LootContextParameterSet.Builder(serverWorld)
-                                .add(LootContextParameters.ORIGIN, Vec3d.ofCenter(blockPos))
-                                .add(LootContextParameters.TOOL, ItemStack.EMPTY)
-                                .addOptional(LootContextParameters.BLOCK_ENTITY, blockEntity)
-                                .addOptional(LootContextParameters.THIS_ENTITY, this.entity);
-                        if (this.destructionType == Explosion.DestructionType.DESTROY_WITH_DECAY) {
-                            builder.add(LootContextParameters.EXPLOSION_RADIUS, this.power);
-                        }
-
-                        blockState.onStacksDropped(serverWorld, blockPos, ItemStack.EMPTY, bl2);
-                        blockState.getDroppedStacks(builder).forEach(stack -> tryMergeStack(objectArrayList, stack, blockPos2));
-                    }
+//                    if (block.shouldDropItemsOnExplosion(this) && this.world instanceof ServerWorld serverWorld) {
+//                        BlockEntity blockEntity = blockState.hasBlockEntity() ? this.world.getBlockEntity(blockPos) : null;
+//                        LootContextParameterSet.Builder builder = new LootContextParameterSet.Builder(serverWorld)
+//                                .add(LootContextParameters.ORIGIN, Vec3d.ofCenter(blockPos))
+//                                .add(LootContextParameters.TOOL, ItemStack.EMPTY)
+//                                .addOptional(LootContextParameters.BLOCK_ENTITY, blockEntity)
+//                                .addOptional(LootContextParameters.THIS_ENTITY, this.entity);
+//                        if (this.destructionType == Explosion.DestructionType.DESTROY_WITH_DECAY) {
+//                            builder.add(LootContextParameters.EXPLOSION_RADIUS, this.power);
+//                        }
+//
+//                        blockState.onStacksDropped(serverWorld, blockPos, ItemStack.EMPTY, bl2);
+//                        blockState.getDroppedStacks(builder).forEach(stack -> tryMergeStack(objectArrayList, stack, blockPos2));
+//                    }
 
                     this.world.setBlockState(blockPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
                     block.onDestroyedByExplosion(this.world, blockPos, this);

@@ -51,7 +51,7 @@ public class ModTntEntity extends TntEntity {
 
     private void explode() {
         //this.getWorld().createExplosion(this, this.getX(), this.getBodyY(0.0625), this.getZ(), 30.0F, World.ExplosionSourceType.TNT);
-        ModExplosion explosion = new ModExplosion(this.getWorld(), this, null, null, this.getX(), this.getBodyY(0.0625), this.getZ(), power, false, Explosion.DestructionType.DESTROY);
+        ModExplosion explosion = new ModExplosion(this.getWorld(), this, null, null, this.getX(), this.getBodyY(0.0625), this.getZ(), power, true, Explosion.DestructionType.DESTROY);
         explosion.collectBlocksAndDamageEntities();
         explosion.affectWorld(true);
 
