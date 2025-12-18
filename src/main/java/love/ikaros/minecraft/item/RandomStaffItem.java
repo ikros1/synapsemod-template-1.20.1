@@ -2,7 +2,6 @@ package love.ikaros.minecraft.item;
 
 import love.ikaros.minecraft.sound.ModSoundEvents;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -14,6 +13,7 @@ import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.Registries;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
@@ -21,7 +21,6 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.UseAction;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 
@@ -39,7 +38,6 @@ public class RandomStaffItem extends Item {
     private static BlockPos recordCenter = null;
 
     private final Map<BlockPos, BlockState> cachedData = new ConcurrentHashMap<>();
-    // 加上 volatile 确保线程可见性
     private volatile Map<BlockPos, BlockState> tempRestoreMap = null;
 
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -48,16 +46,73 @@ public class RandomStaffItem extends Item {
         super(settings);
     }
 
+    /**
+     * 左键点击方块逻辑：保持原版效果（开启时空记录）
+     */
     @Override
     public boolean canMine(BlockState state, World world, BlockPos pos, PlayerEntity miner) {
         if (!world.isClient) {
             if (IS_RECORDING.get()) {
-                miner.sendMessage(Text.of("§c[系统] 正在持久化，请稍候..."), true);
+                miner.sendMessage(Text.of("§c[墨忒耳] 正在持久化，请稍候..."), true);
             } else {
                 startParallelRecord(world, pos, miner);
             }
         }
         return false;
+    }
+
+    /**
+     * 右键逻辑：区分 Shift 切换天气 和 普通长按回溯
+     */
+    @Override
+    public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
+        ItemStack stack = user.getStackInHand(hand);
+
+        // 新增：如果是 Shift (潜行) + 右键，则切换天气
+        if (user.isSneaking()) {
+            if (!world.isClient) {
+                cycleWeather(world, user);
+            }
+            return TypedActionResult.success(stack);
+        }
+
+        // 原有逻辑：长按回溯
+        if (!world.isClient) {
+            if (IS_RECORDING.get()) return TypedActionResult.fail(stack);
+            if (cachedData.isEmpty()) loadCacheFromFile();
+            if (!cachedData.isEmpty()) {
+                tempRestoreMap = new ConcurrentHashMap<>(cachedData);
+            }
+        }
+        user.setCurrentHand(hand);
+        return TypedActionResult.consume(stack);
+    }
+
+    /**
+     * 私有逻辑：天气按顺序切换 (晴天 -> 雨天 -> 雷雨 -> 循环)
+     */
+    private void cycleWeather(World world, PlayerEntity player) {
+        if (world instanceof ServerWorld serverWorld) {
+            String weatherName;
+
+            if (serverWorld.isThundering()) {
+                // 当前雷雨 -> 变晴
+                serverWorld.setWeather(120000, 0, false, false);
+                weatherName = "§e晴天";
+            } else if (serverWorld.isRaining()) {
+                // 当前雨天 -> 变雷雨
+                serverWorld.setWeather(0, 120000, true, true);
+                weatherName = "§8雷雨";
+            } else {
+                // 当前晴天 -> 变雨天
+                serverWorld.setWeather(0, 120000, true, false);
+                weatherName = "§b雨天";
+            }
+
+            player.sendMessage(Text.of("§6[墨忒耳] §f气候已扭转至: " + weatherName), true);
+            world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 0.8F, 0.5F);
+        }
     }
 
     private void startParallelRecord(World world, BlockPos center, PlayerEntity player) {
@@ -69,7 +124,7 @@ public class RandomStaffItem extends Item {
         AtomicInteger completedLayers = new AtomicInteger(0);
         List<NbtCompound> collectedEntries = Collections.synchronizedList(new ArrayList<>());
 
-        player.sendMessage(Text.of("§b[系统] 开始时空记录..."), false);
+        player.sendMessage(Text.of("§b[墨忒耳] 开始时空记录..."), false);
         world.playSound(null, player.getX(), player.getY(), player.getZ(),
                 ModSoundEvents.HIYOLI_WAND_SET, SoundCategory.PLAYERS, 10.0F, 1F);
 
@@ -163,24 +218,9 @@ public class RandomStaffItem extends Item {
     }
 
     @Override
-    public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
-        if (!world.isClient) {
-            if (IS_RECORDING.get()) return TypedActionResult.fail(user.getStackInHand(hand));
-            if (cachedData.isEmpty()) loadCacheFromFile();
-            if (!cachedData.isEmpty()) {
-                tempRestoreMap = new ConcurrentHashMap<>(cachedData);
-            }
-        }
-        user.setCurrentHand(hand);
-        return TypedActionResult.consume(user.getStackInHand(hand));
-    }
-
-    @Override
     public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {
         if (!world.isClient && user instanceof PlayerEntity player) {
-            // 获取局部引用，防止在执行过程中被其他线程置 null
             Map<BlockPos, BlockState> currentTempMap = this.tempRestoreMap;
-
             if (currentTempMap != null) {
                 int usedTicks = this.getMaxUseTime(stack) - remainingUseTicks;
                 int batchSize = 10 + (usedTicks / 20) * 400;
@@ -199,7 +239,6 @@ public class RandomStaffItem extends Item {
         stack.damage(1, player, (p) -> p.sendToolBreakStatus(player.getActiveHand()));
 
         Random random = world.getRandom();
-        // 使用局部变量 currentMap 及其快照进行操作
         List<BlockPos> keys = new ArrayList<>(currentMap.keySet());
         int actualToRestore = Math.min(amount, keys.size());
 
@@ -207,10 +246,7 @@ public class RandomStaffItem extends Item {
             if (keys.isEmpty()) break;
             int index = random.nextInt(keys.size());
             BlockPos targetPos = keys.remove(index);
-
-            // 使用 remove 确保线程安全
             BlockState savedState = currentMap.remove(targetPos);
-
             if (savedState != null && world.isInBuildLimit(targetPos)) {
                 if (world.getBlockState(targetPos) != savedState) {
                     world.setBlockState(targetPos, savedState);
@@ -218,7 +254,6 @@ public class RandomStaffItem extends Item {
             }
         }
 
-        // 计算进度
         int total = cachedData.size();
         if (total > 0) {
             double progress = (double) (total - currentMap.size()) / total * 100;
@@ -233,7 +268,6 @@ public class RandomStaffItem extends Item {
 
     @Override
     public void onStoppedUsing(ItemStack stack, World world, LivingEntity user, int remainingUseTicks) {
-        // 玩家主动松开时清理
         this.tempRestoreMap = null;
     }
 
