@@ -39,81 +39,92 @@ public class SoulBeamItem extends Item {
         Vec3d startPos = user.getEyePos();
         Vec3d lookDir = user.getRotationVec(1.0F).normalize();
 
+        // 判定参数
         double radius = 100.0;
-        double angleLimit = 22.5;
-        double halfThickness = 3; // 稍微增加判定厚度，确保方块破坏更彻底
+        double angleLimitRad = Math.toRadians(22.5); // 扇形半角
+        double halfThickness = 3.0; // 影响面厚度的一半
 
-        // --- 构建倾斜坐标系 ---
-        Vec3d verticalAxis = new Vec3d(0, 1, 0);
-        if (Math.abs(lookDir.y) > 0.9) verticalAxis = new Vec3d(1, 0, 0);
-
+        // --- 构建局部坐标系 (用于计算到倾斜平面的距离) ---
+        Vec3d verticalAxis = Math.abs(lookDir.y) > 0.9 ? new Vec3d(1, 0, 0) : new Vec3d(0, 1, 0);
         Vec3d rightVec = lookDir.crossProduct(verticalAxis).normalize();
         Vec3d upVec = rightVec.crossProduct(lookDir).normalize();
 
+        // 45度倾斜平面的法向量
         double rollRad = Math.toRadians(45);
-        // 倾斜平面的法向量（决定厚度方向）
-        Vec3d planeNormal = upVec.multiply(Math.cos(rollRad)).add(rightVec.multiply(Math.sin(rollRad))).normalize();
-        // 倾斜平面的横向向量（决定扇形展开方向）
-        Vec3d planeHorizontal = rightVec.multiply(Math.cos(rollRad)).subtract(upVec.multiply(Math.sin(rollRad))).normalize();
+        Vec3d planeNormal = upVec.multiply(Math.cos(rollRad))
+                .add(rightVec.multiply(Math.sin(rollRad)))
+                .normalize();
 
-        // --- 1. 实体伤害逻辑 ---
+        // --- 1. 实体处理 ---
+        // 使用标准的 AABB 预筛选提升性能
         Box scanBox = new Box(startPos, startPos).expand(radius);
         List<Entity> targets = world.getOtherEntities(user, scanBox);
 
         for (Entity entity : targets) {
             if (entity instanceof LivingEntity target && target.isAlive()) {
                 Vec3d relativePos = target.getBoundingBox().getCenter().subtract(startPos);
-                double distance = relativePos.length();
-
-                if (distance <= radius && distance > 0) {
-                    double dot = relativePos.normalize().dotProduct(lookDir);
-                    double angle = Math.toDegrees(Math.acos(MathHelper.clamp(dot, -1, 1)));
-
-                    if (angle <= angleLimit) {
-                        double distanceToPlane = Math.abs(relativePos.dotProduct(planeNormal));
-                        if (distanceToPlane <= halfThickness) {
-                            target.damage(world.getDamageSources().playerAttack(user), 50.0F);
-                            target.takeKnockback(5.0, -lookDir.x, -lookDir.z);
-                        }
-                    }
+                if (checkImpact(relativePos, lookDir, planeNormal, radius, angleLimitRad, halfThickness)) {
+                    target.damage(world.getDamageSources().playerAttack(user), 50.0F);
+                    target.takeKnockback(5.0, -lookDir.x, -lookDir.z);
                 }
             }
         }
 
-        // --- 2. 视觉效果与方块破坏逻辑 ---
+        // --- 2. 方块处理 (核心优化：遍历 AABB) ---
         if (world instanceof ServerWorld serverWorld) {
-            // 降低步进间距，增加采样密度
-            for (double r = 1.5; r <= radius; r += 0.1) {
-                for (double a = -angleLimit; a <= angleLimit; a += 5.0) {
-                    double radA = Math.toRadians(a);
+            // 获取方块遍历的边界
+            BlockPos min = BlockPos.ofFloored(startPos.x - radius, startPos.y - radius, startPos.z - radius);
+            BlockPos max = BlockPos.ofFloored(startPos.x + radius, startPos.y + radius, startPos.z + radius);
 
-                    // 计算在该倾斜平面上展开的方向
-                    Vec3d sectorDir = lookDir.multiply(Math.cos(radA))
-                            .add(planeHorizontal.multiply(Math.sin(radA)));
+            for (BlockPos bPos : BlockPos.iterate(min, max)) {
+                // 计算方块中心相对于起始点的向量
+                Vec3d relativePos = Vec3d.ofCenter(bPos).subtract(startPos);
 
-                    Vec3d impactPoint = startPos.add(sectorDir.multiply(r));
+                if (checkImpact(relativePos, lookDir, planeNormal, radius, angleLimitRad, halfThickness)) {
+                    BlockState state = world.getBlockState(bPos);
 
-                    // 绘制粒子
-                    serverWorld.spawnParticles(
-                            ParticleTypes.SOUL_FIRE_FLAME,
-                            impactPoint.x, impactPoint.y, impactPoint.z,
-                            1, 0.05, 0.05, 0.05, 0.0
-                    );
+                    // 过滤掉不可破坏方块和空气
+                    if (!state.isAir() && state.getHardness(world, bPos) >= 0) {
+                        world.breakBlock(bPos, true, user);
 
-                    // --- 强化版方块破坏 ---
-                    // 沿着法线方向（厚度方向）上下探测
-                    for (double h = -halfThickness; h <= halfThickness; h += 1.0) {
-                        Vec3d finalPos = impactPoint.add(planeNormal.multiply(h));
-                        BlockPos bPos = BlockPos.ofFloored(finalPos);
-
-                        BlockState state = world.getBlockState(bPos);
-                        // 检查硬度，确保不会破坏基岩
-                        if (!state.isAir() && state.getHardness(world, bPos) >= 0) {
-                            world.breakBlock(bPos, true, user);
+                        // 仅在破坏方块的地方低概率生成粒子，减少视觉污染和性能消耗
+                        if (world.random.nextFloat() < 0.1) {
+                            serverWorld.spawnParticles(
+                                    ParticleTypes.SOUL_FIRE_FLAME,
+                                    bPos.getX() + 0.5, bPos.getY() + 0.5, bPos.getZ() + 0.5,
+                                    1, 0.1, 0.1, 0.1, 0.0
+                            );
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * 判定目标点是否在灵魂激流的影响范围内
+     * @param relativePos 目标点相对于起始点的向量
+     * @param lookDir 玩家朝向
+     * @param planeNormal 倾斜平面的法线
+     */
+    private boolean checkImpact(Vec3d relativePos, Vec3d lookDir, Vec3d planeNormal,
+                                double radius, double angleLimitRad, double halfThickness) {
+
+        double distSq = relativePos.lengthSquared();
+
+        // 1. 距离判定 (平方比较，快)
+        if (distSq > radius * radius || distSq < 0.25) return false;
+
+        double dist = Math.sqrt(distSq);
+        Vec3d normRelative = relativePos.multiply(1.0 / dist);
+
+        // 2. 角度判定 (点积计算夹角)
+        double dot = normRelative.dotProduct(lookDir);
+        // 使用 acos 获取实际夹角，需 clamp 保证输入范围
+        if (Math.acos(MathHelper.clamp(dot, -1, 1)) > angleLimitRad) return false;
+
+        // 3. 厚度判定 (点积计算在法线方向上的投影长度)
+        double distanceToPlane = Math.abs(relativePos.dotProduct(planeNormal));
+        return distanceToPlane <= halfThickness;
     }
 }
