@@ -12,15 +12,15 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 魔改剑气类
- * 功能：右键发出50格灵魂火剑气，破坏方块，造成50点伤害并击退。
+ * 强化版灵魂剑气
+ * 范围：一个宽度为 6，高度为 3，长度为 50 的倾斜长方体
  */
 public class SoulBeamItem extends Item {
 
@@ -31,71 +31,74 @@ public class SoulBeamItem extends Item {
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
-
-        // 仅在服务端执行逻辑，避免客户端与服务端不同步（如方块消失了但又卡回来）
         if (!world.isClient) {
             executeSoulBeam(world, user);
-
-            // 设置 2 秒冷却，防止连续使用导致服务器计算压力过大
             user.getItemCooldownManager().set(this, 40);
         }
-
-        // 播放玩家挥手动画
         user.swingHand(hand);
         return TypedActionResult.success(stack);
     }
 
     private void executeSoulBeam(World world, PlayerEntity user) {
-        Vec3d lookDir = user.getRotationVec(1.0F); // 获取玩家视野方向向量
-        Vec3d startPos = user.getEyePos();         // 获取起始位置（眼睛高度）
+        Vec3d startPos = user.getEyePos();
+        Vec3d lookDir = user.getRotationVec(1.0F);
 
-        // 记录在这一发剑气中已经被伤害过的生物，防止 0.5 格步进导致重复伤害
-        List<Entity> hitEntities = new ArrayList<>();
+        // 1. 定义剑气的几何参数
+        double length = 50.0;
+        double width = 6.0;   // 左右各 3 格
+        double height = 3.0;  // 上下各 1.5 格
 
-        // 剑气蔓延 50 格
-        for (double d = 1; d <= 50; d += 0.5) {
-            Vec3d currentPos = startPos.add(lookDir.multiply(d));
-            BlockPos blockPos = BlockPos.ofFloored(currentPos);
+        // 2. 计算一个包围这个“倾斜长方形”的最大 AABB 盒子，用于初步筛选实体
+        // 这样可以避免直接遍历全图实体，性能更高
+        Box scanArea = new Box(startPos, startPos.add(lookDir.multiply(length))).expand(width);
+        List<Entity> entities = world.getOtherEntities(user, scanArea);
 
-            // --- 1. 粒子效果 (灵魂火) ---
-            if (world instanceof ServerWorld serverWorld) {
+        // 3. 处理伤害逻辑
+        for (Entity entity : entities) {
+            if (entity instanceof LivingEntity target && target.isAlive()) {
+                // 计算实体相对于玩家的位置向量
+                Vec3d relativePos = target.getPos().subtract(startPos);
+
+                // 使用点积判断实体是否在长方形内
+                // dotProduct = 实体在玩家正前方的投影长度
+                double dotProduct = relativePos.dotProduct(lookDir);
+
+                if (dotProduct > 0 && dotProduct < length) {
+                    // 计算实体距离剑气中心线的垂直距离
+                    Vec3d projection = lookDir.multiply(dotProduct);
+                    Vec3d perpendicular = relativePos.subtract(projection);
+
+                    // 判断宽度和高度是否在范围内 (水平距离和垂直距离)
+                    if (Math.abs(perpendicular.x) < width / 2 && Math.abs(perpendicular.y) < height && Math.abs(perpendicular.z) < width / 2) {
+                        target.damage(world.getDamageSources().playerAttack(user), 50.0F);
+                        target.takeKnockback(3.0, -lookDir.x, -lookDir.z);
+                    }
+                }
+            }
+        }
+
+        // 4. 处理方块破坏和粒子（为了视觉效果，这里依然需要简单的步进循环）
+        if (world instanceof ServerWorld serverWorld) {
+            // 我们每隔 2 格生成一个“面”的粒子，这样看起来更像一个巨大的冲击波
+            for (double d = 2; d <= length; d += 2.0) {
+                Vec3d center = startPos.add(lookDir.multiply(d));
+
+                // 在每一段横截面上随机生成粒子
                 serverWorld.spawnParticles(
                         ParticleTypes.SOUL_FIRE_FLAME,
-                        currentPos.x, currentPos.y, currentPos.z,
-                        5,          // 数量
-                        0.2, 0.2, 0.2, // 在 0.2 范围内发散，让剑气看起来更粗
-                        0.05        // 粒子速度
+                        center.x, center.y, center.z,
+                        20,         // 每一段产生的粒子数
+                        width / 2, height / 2, width / 2, // 粒子的散布范围，对应剑气的宽度高度
+                        0.1
                 );
-            }
 
-            // --- 2. 方块破坏逻辑 ---
-            BlockState state = world.getBlockState(blockPos);
-            // 只有非空且硬度不为 -1 (基岩/传送门) 的方块才会被破坏
-            if (!state.isAir() && state.getHardness(world, blockPos) >= 0) {
-                world.breakBlock(blockPos, true, user);
-            }
-
-            // --- 3. 伤害与击退逻辑 ---
-            // 修复 Box 构造：基于当前点坐标创建一个 3x3x3 的探测区域
-            Box area = new Box(
-                    currentPos.x - 1.5, currentPos.y - 1.5, currentPos.z - 1.5,
-                    currentPos.x + 1.5, currentPos.y + 1.5, currentPos.z + 1.5
-            );
-
-            List<Entity> targets = world.getOtherEntities(user, area);
-            for (Entity entity : targets) {
-                if (entity instanceof LivingEntity target && !hitEntities.contains(target)) {
-                    // 确保不会伤到自己
-                    if (target == user) continue;
-
-                    // 造成 50 点伤害 (25 颗心)
-                    target.damage(world.getDamageSources().playerAttack(user), 50.0F);
-
-                    // 强力击退：沿剑气前进方向推开，力度为 2.0
-                    target.takeKnockback(8.0, -lookDir.x, -lookDir.z);
-
-                    // 标记该生物，防止在 50 格路径中被后续循环重复伤害
-                    hitEntities.add(target);
+                // 破坏中心线附近的方块
+                BlockPos bPos = BlockPos.ofFloored(center);
+                for (BlockPos targetPos : BlockPos.iterate(bPos.add(-2, -1, -2), bPos.add(2, 1, 2))) {
+                    BlockState state = world.getBlockState(targetPos);
+                    if (!state.isAir() && state.getHardness(world, targetPos) >= 0) {
+                        world.breakBlock(targetPos, true, user);
+                    }
                 }
             }
         }
