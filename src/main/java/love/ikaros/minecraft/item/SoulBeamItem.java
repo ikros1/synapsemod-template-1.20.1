@@ -45,7 +45,7 @@ public class SoulBeamItem extends Item {
         Vec3d lookDir = user.getRotationVec(1.0F).normalize();
 
         // 逻辑判定参数 (50格范围)
-        double radius = 50.0;
+        double radius = 70.0;
         double angleLimitDeg = 22.5;
         double angleLimitRad = Math.toRadians(angleLimitDeg);
         double halfThickness = 3.0;
@@ -84,16 +84,16 @@ public class SoulBeamItem extends Item {
                 if (checkImpact(relativePos, lookDir, planeNormal, radius, angleLimitRad, halfThickness)) {
                     BlockState state = world.getBlockState(bPos);
                     if (!state.isAir() && state.getHardness(world, bPos) >= 0) {
-                        world.breakBlock(bPos, false, user);
+                        world.setBlockState(bPos, net.minecraft.block.Blocks.AIR.getDefaultState(), 3);
                     }
                 }
             }
 
             // --- 3. 视觉效果：10格内极致密单层扇面 ---
-            double visualRadius = 10.0;
+            double visualRadius = 70.0;
             // 径向步进 0.4，角度步进 1.0，形成几乎无缝的火幕
-            for (double r = 0.8; r <= visualRadius; r += 1) {
-                for (double a = -angleLimitDeg; a <= angleLimitDeg; a += 1.0) {
+            for (double r = 0.8; r <= visualRadius; r += 2) {
+                for (double a = -angleLimitDeg; a <= angleLimitDeg; a += 2.0) {
                     double radA = Math.toRadians(a);
                     // 计算粒子在 45度 切面上的位置
                     Vec3d sectorDir = lookDir.multiply(Math.cos(radA))
