@@ -85,7 +85,7 @@ public class SoulBeamItem extends Item {
 
                     // 过滤掉不可破坏方块和空气
                     if (!state.isAir() && state.getHardness(world, bPos) >= 0) {
-                        world.breakBlock(bPos, true, user);
+                        world.breakBlock(bPos, false, user);
 
                         // 仅在破坏方块的地方低概率生成粒子，减少视觉污染和性能消耗
                         if (world.random.nextFloat() < 0.1) {
