@@ -18,10 +18,6 @@ import net.minecraft.world.World;
 
 import java.util.List;
 
-/**
- * 终极灵魂剑气 - 倾斜扇形斩
- * 形状：50格半径的4/1圆（扇形），厚度2格，整体沿视线轴旋转45度
- */
 public class SoulBeamItem extends Item {
 
     public SoulBeamItem(Settings settings) {
@@ -31,64 +27,51 @@ public class SoulBeamItem extends Item {
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
-
         if (!world.isClient) {
             executeSoulBeam(world, user);
-            // 2秒冷却
-            user.getItemCooldownManager().set(this, 40);
+            user.getItemCooldownManager().set(this, 5);
         }
-
         user.swingHand(hand);
         return TypedActionResult.success(stack);
     }
 
     private void executeSoulBeam(World world, PlayerEntity user) {
-        // --- 1. 基础向量参数 ---
         Vec3d startPos = user.getEyePos();
-        Vec3d lookDir = user.getRotationVec(1.0F).normalize(); // 中轴向量 (Forward)
+        Vec3d lookDir = user.getRotationVec(1.0F).normalize();
 
-        double radius = 50.0;     // 扇形半径
-        double angleLimit = 22.5; // 45度角的一半（中轴向两侧各偏22.5度）
-        double halfThickness = 1.0; // 总厚度2格，所以半厚度为1
+        double radius = 100.0;
+        double angleLimit = 22.5;
+        double halfThickness = 3; // 稍微增加判定厚度，确保方块破坏更彻底
 
-        // --- 2. 构建倾斜坐标系 ---
-        // 找到一个垂直于视线的右向量
+        // --- 构建倾斜坐标系 ---
         Vec3d verticalAxis = new Vec3d(0, 1, 0);
-        if (Math.abs(lookDir.y) > 0.9) {
-            verticalAxis = new Vec3d(1, 0, 0); // 防止直视天空时的奇异点
-        }
+        if (Math.abs(lookDir.y) > 0.9) verticalAxis = new Vec3d(1, 0, 0);
+
         Vec3d rightVec = lookDir.crossProduct(verticalAxis).normalize();
         Vec3d upVec = rightVec.crossProduct(lookDir).normalize();
 
-        // 将坐标轴绕 lookDir 旋转 45 度 (弧度制)
         double rollRad = Math.toRadians(45);
-        // 计算倾斜平面的法向量 (Normal Vector)，用于判断“厚度”
+        // 倾斜平面的法向量（决定厚度方向）
         Vec3d planeNormal = upVec.multiply(Math.cos(rollRad)).add(rightVec.multiply(Math.sin(rollRad))).normalize();
-        // 计算倾斜平面的横向展开向量 (用于计算扇形展开)
+        // 倾斜平面的横向向量（决定扇形展开方向）
         Vec3d planeHorizontal = rightVec.multiply(Math.cos(rollRad)).subtract(upVec.multiply(Math.sin(rollRad))).normalize();
 
-        // --- 3. 实体检测 ---
-        // 先用 AABB 粗略筛选 50 格内的实体提高性能
+        // --- 1. 实体伤害逻辑 ---
         Box scanBox = new Box(startPos, startPos).expand(radius);
         List<Entity> targets = world.getOtherEntities(user, scanBox);
 
         for (Entity entity : targets) {
             if (entity instanceof LivingEntity target && target.isAlive()) {
-                // 实体中心点相对于玩家位置
                 Vec3d relativePos = target.getBoundingBox().getCenter().subtract(startPos);
                 double distance = relativePos.length();
 
                 if (distance <= radius && distance > 0) {
-                    // A. 角度判定 (利用点积计算与视线中轴的夹角)
                     double dot = relativePos.normalize().dotProduct(lookDir);
                     double angle = Math.toDegrees(Math.acos(MathHelper.clamp(dot, -1, 1)));
 
                     if (angle <= angleLimit) {
-                        // B. 厚度判定 (实体在平面法线方向上的投影距离)
                         double distanceToPlane = Math.abs(relativePos.dotProduct(planeNormal));
-
                         if (distanceToPlane <= halfThickness) {
-                            // 命中逻辑
                             target.damage(world.getDamageSources().playerAttack(user), 50.0F);
                             target.takeKnockback(5.0, -lookDir.x, -lookDir.z);
                         }
@@ -97,42 +80,36 @@ public class SoulBeamItem extends Item {
             }
         }
 
-        // --- 4. 视觉效果与方块破坏 ---
+        // --- 2. 视觉效果与方块破坏逻辑 ---
         if (world instanceof ServerWorld serverWorld) {
-            // 步进渲染：r 代表半径距离，a 代表扇形张开角度
-            for (double r = 2; r <= radius; r += 2.5) {
-                // 在每一个半径圆弧上生成粒子
-                for (double a = -angleLimit; a <= angleLimit; a += 4.0) {
+            // 降低步进间距，增加采样密度
+            for (double r = 1.5; r <= radius; r += 0.1) {
+                for (double a = -angleLimit; a <= angleLimit; a += 5.0) {
                     double radA = Math.toRadians(a);
 
-                    // 计算在该倾斜平面上展开的粒子位置
-                    // 组合公式：中轴方向 + 倾斜平面的横向方向
-                    Vec3d particleDir = lookDir.multiply(Math.cos(radA))
+                    // 计算在该倾斜平面上展开的方向
+                    Vec3d sectorDir = lookDir.multiply(Math.cos(radA))
                             .add(planeHorizontal.multiply(Math.sin(radA)));
 
-                    Vec3d pos = startPos.add(particleDir.multiply(r));
+                    Vec3d impactPoint = startPos.add(sectorDir.multiply(r));
 
-                    // 召唤灵魂火粒子
+                    // 绘制粒子
                     serverWorld.spawnParticles(
                             ParticleTypes.SOUL_FIRE_FLAME,
-                            pos.x, pos.y, pos.z,
-                            1, 0.0, 0.0, 0.0, 0.0
+                            impactPoint.x, impactPoint.y, impactPoint.z,
+                            1, 0.05, 0.05, 0.05, 0.0
                     );
 
-                    // 破坏方块 (为了性能，每 5 格半径才执行一次方块扫描)
-                    if (r % 5 == 0) {
-                        BlockPos bPos = BlockPos.ofFloored(pos);
-                        // 扫描厚度范围内的方块
-                        for (int h = -1; h <= 1; h++) {
-                            BlockPos targetBlock = bPos.add(
-                                    (int)(planeNormal.x * h),
-                                    (int)(planeNormal.y * h),
-                                    (int)(planeNormal.z * h)
-                            );
-                            BlockState state = world.getBlockState(targetBlock);
-                            if (!state.isAir() && state.getHardness(world, targetBlock) >= 0) {
-                                world.breakBlock(targetBlock, true, user);
-                            }
+                    // --- 强化版方块破坏 ---
+                    // 沿着法线方向（厚度方向）上下探测
+                    for (double h = -halfThickness; h <= halfThickness; h += 1.0) {
+                        Vec3d finalPos = impactPoint.add(planeNormal.multiply(h));
+                        BlockPos bPos = BlockPos.ofFloored(finalPos);
+
+                        BlockState state = world.getBlockState(bPos);
+                        // 检查硬度，确保不会破坏基岩
+                        if (!state.isAir() && state.getHardness(world, bPos) >= 0) {
+                            world.breakBlock(bPos, true, user);
                         }
                     }
                 }
