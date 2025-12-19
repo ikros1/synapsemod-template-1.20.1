@@ -13,6 +13,7 @@ public class ModSoundEvents {
     public static final SoundEvent HIYOLI_WAND_SET = register("hiyoli_wand_set");
     public static final SoundEvent HIYOLI_WAND_USE = register("hiyoli_wand_use");
     public static final SoundEvent NYMPH_WAND_USE = register("nymph_wand_use");
+    public static final SoundEvent CHRYSAOR_SWORD = register("chrysaor_sword");
     public static final SoundEvent LING = register("ling");
     public static final SoundEvent RING =  register("ring");
 

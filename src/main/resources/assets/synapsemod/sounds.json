@@ -28,5 +28,11 @@
     "sounds": [
       "synapsemod:ling"
     ]
+  },
+  "chrysaor_sword": {
+    "subtitle": "sounds.synapsemod.chrysaor_sword",
+    "sounds": [
+      "synapsemod:chrysaor_sword"
+    ]
   }
 }
