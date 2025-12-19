@@ -103,9 +103,9 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
                             ).normalize();
 
                             // 设置参数
-                            double step = 10.0;   // 每个爆炸点的间隔
-                            int safeDistance = 22; // 安全距离
-                            int maxCount = 20;     // 最大爆炸点数
+                            double step = 40.0;   // 每个爆炸点的间隔
+                            int safeDistance = 52; // 安全距离
+                            int maxCount = 80;     // 最大爆炸点数
 
                             // 从起点偏移安全距离开始（加0.5让坐标居中）
                             Vec3d currentPos = new Vec3d(
@@ -117,7 +117,7 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
                             int spawned = 0;
                             while(spawned < maxCount){
                                 // 生成TNT
-                                primeTnt(world, new BlockPos(
+                                primeMaxTnt(world, new BlockPos(
                                         (int)Math.floor(currentPos.x),
                                         (int)Math.floor(currentPos.y),
                                         (int)Math.floor(currentPos.z)
@@ -128,7 +128,7 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
                                 spawned++;
 
                                 // 射程保护（RANGE=40时最大800格）
-                                if(currentPos.distanceTo(Vec3d.of(posStart)) > 40*(f-0.5) * step) break;
+                                if(currentPos.distanceTo(Vec3d.of(posStart)) > 80*(f-0.5) * step) break;
                             }
                             //System.out.println("zui hou"+posEnd);
                             primeMaxTnt(world,posEnd,playerEntity);

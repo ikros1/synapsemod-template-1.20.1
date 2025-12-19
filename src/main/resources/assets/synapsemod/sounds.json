@@ -22,5 +22,11 @@
     "sounds": [
       "synapsemod:nymph_wand_use"
     ]
+  },
+  "ling": {
+    "subtitle": "sounds.synapsemod.ling",
+    "sounds": [
+      "synapsemod:ling"
+    ]
   }
 }

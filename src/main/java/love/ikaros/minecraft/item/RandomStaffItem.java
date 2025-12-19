@@ -46,9 +46,6 @@ public class RandomStaffItem extends Item {
         super(settings);
     }
 
-    /**
-     * 左键点击方块逻辑：保持原版效果（开启时空记录）
-     */
     @Override
     public boolean canMine(BlockState state, World world, BlockPos pos, PlayerEntity miner) {
         if (!world.isClient) {
@@ -61,14 +58,10 @@ public class RandomStaffItem extends Item {
         return false;
     }
 
-    /**
-     * 右键逻辑：区分 Shift 切换天气 和 普通长按回溯
-     */
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
 
-        // 新增：如果是 Shift (潜行) + 右键，则切换天气
         if (user.isSneaking()) {
             if (!world.isClient) {
                 cycleWeather(world, user);
@@ -76,7 +69,6 @@ public class RandomStaffItem extends Item {
             return TypedActionResult.success(stack);
         }
 
-        // 原有逻辑：长按回溯
         if (!world.isClient) {
             if (IS_RECORDING.get()) return TypedActionResult.fail(stack);
             if (cachedData.isEmpty()) loadCacheFromFile();
@@ -88,27 +80,19 @@ public class RandomStaffItem extends Item {
         return TypedActionResult.consume(stack);
     }
 
-    /**
-     * 私有逻辑：天气按顺序切换 (晴天 -> 雨天 -> 雷雨 -> 循环)
-     */
     private void cycleWeather(World world, PlayerEntity player) {
         if (world instanceof ServerWorld serverWorld) {
             String weatherName;
-
             if (serverWorld.isThundering()) {
-                // 当前雷雨 -> 变晴
                 serverWorld.setWeather(120000, 0, false, false);
                 weatherName = "§e晴天";
             } else if (serverWorld.isRaining()) {
-                // 当前雨天 -> 变雷雨
                 serverWorld.setWeather(0, 120000, true, true);
                 weatherName = "§8雷雨";
             } else {
-                // 当前晴天 -> 变雨天
                 serverWorld.setWeather(0, 120000, true, false);
                 weatherName = "§b雨天";
             }
-
             player.sendMessage(Text.of("§6[墨忒耳] §f气候已扭转至: " + weatherName), true);
             world.playSound(null, player.getX(), player.getY(), player.getZ(),
                     SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 0.8F, 0.5F);
@@ -229,6 +213,10 @@ public class RandomStaffItem extends Item {
         }
     }
 
+    /**
+     * 改进：引入损耗计数器逻辑
+     * 降低 stack.damage 的调用频率，从而减少 NBT 更新开销
+     */
     private void performDynamicRandomRestore(World world, PlayerEntity player, ItemStack stack, int amount, Map<BlockPos, BlockState> currentMap) {
         if (currentMap.isEmpty()) {
             player.sendMessage(Text.of("§a[完成] 时空回溯完成！"), true);
@@ -236,7 +224,10 @@ public class RandomStaffItem extends Item {
             return;
         }
 
-        stack.damage(1, player, (p) -> p.sendToolBreakStatus(player.getActiveHand()));
+        // --- 损耗逻辑优化：每 10 刻扣除 10 点耐久，代替每刻扣 1 点 ---
+        if (world.getTime() % 100 == 0) {
+            stack.damage(100, player, (p) -> p.sendToolBreakStatus(player.getActiveHand()));
+        }
 
         Random random = world.getRandom();
         List<BlockPos> keys = new ArrayList<>(currentMap.keySet());
