@@ -82,6 +82,15 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
                         posStart = persistentProjectileEntity.getBlockPos();
                         while (!persistentProjectileEntity.isNoClip()&&maxTime>0) {
                             Vec3d vec3d = persistentProjectileEntity.getPos();
+
+                            // 在模拟轨迹的每个点生成灵魂火
+                            ((net.minecraft.server.world.ServerWorld)world).spawnParticles(
+                                    net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                                    vec3d.x, vec3d.y, vec3d.z,
+                                    5,        // 每次生成1个
+                                    0.02, 0.02, 0.02, // 极其微小的随机偏移
+                                    0.01      // 速度
+                            );
                             int x =Double.valueOf(vec3d.getX()).intValue();
                             int y =Double.valueOf(vec3d.getY()).intValue();
                             int z =Double.valueOf(vec3d.getZ()).intValue();
@@ -195,31 +204,68 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
             if (pullProgress >= 1.0F) {
                 net.minecraft.server.world.ServerWorld serverWorld = (net.minecraft.server.world.ServerWorld) world;
 
-                for (int i = 0; i < 8; i++) {
-                    // --- 新增：随机位置偏移 ---
-                    // 在以玩家为中心，半径约 0.5 格的范围内随机生成
-                    double offsetX = (world.random.nextDouble() - 0.5) * 0.5;
-                    double offsetZ = (world.random.nextDouble() - 0.5) * 0.5;
-                    // 稍微抬高一点点，防止粒子卡进地板
-                    double offsetY = 0.1;
+                float yaw = player.getYaw();
+                float[] wingAngles = {yaw + 135f, yaw + 225f};
 
-                    double angle = world.random.nextDouble() * 2 * Math.PI;
-                    double horizontalSpeed = 0.05 + world.random.nextDouble() * 0.12;
+                for (float baseAngle : wingAngles) {
+                    // 增加粒子密度
+                    for (int i = 0; i < 20; i++) {
+                        double radians = Math.toRadians(baseAngle);
+                        double dirX = -Math.sin(radians);
+                        double dirZ = Math.cos(radians);
 
-                    double vx = Math.cos(angle) * horizontalSpeed;
-                    double vz = Math.sin(angle) * horizontalSpeed;
-                    double vy = 0.25 + world.random.nextDouble() * 0.1;
+                        // --- 消失距离控制逻辑 ---
+                        // 1. 既然不能直接删掉远程粒子，我们就让粒子在 [0, 2] 格范围内随机位置生成
+                        // 2. 然后给它一个极短的寿命（SOUL_FIRE_FLAME 寿命较固定，所以我们控制速度）
 
+                        double spawnDist = world.random.nextDouble() * 2.0; // 随机分布在0-2格内
+                        double offsetX = dirX * spawnDist;
+                        double offsetZ = dirZ * spawnDist;
+
+                        // 高度依然保持
+                        double offsetY = 0.5 + world.random.nextDouble() * 1.5;
+
+                        // 速度设小一点，或者让它几乎不移动，只在原地闪烁
+                        // 这样粒子看起来就像是在 2 格范围内凭空出现并闪烁消失
+                        double speedMultiplier = 0.1;
+                        double vx = dirX * speedMultiplier;
+                        double vz = dirZ * speedMultiplier;
+
+                        serverWorld.spawnParticles(
+                                net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                                player.getX() + offsetX,
+                                player.getY() + offsetY,
+                                player.getZ() + offsetZ,
+                                0,
+                                vx,
+                                0.02,   // 微微上升
+                                vz,
+                                0.5     // 速度系数
+                        );
+                    }
+                }
+
+                // --- 2. 新增：箭头着火效果 ---
+                // 获取玩家视线方向向量 (长度为1)
+                Vec3d lookVec = player.getRotationVec(1.0F);
+
+                // 计算箭头的空间坐标：
+                // 眼睛位置 + 视线方向 * 距离(约0.7格)
+                // 稍微向下偏移一点 (y - 0.2)，因为弓箭通常拿在胸口高度
+                double arrowX = player.getX() + lookVec.x * 1+0.5;
+                double arrowY = player.getEyeY() + lookVec.y * 1 - 0.2;
+                double arrowZ = player.getZ() + lookVec.z * 1;
+
+                // 在箭头位置生成一小团密集的灵魂火
+                for (int j = 0; j < 5; j++) {
                     serverWorld.spawnParticles(
                             net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
-                            player.getX() + offsetX, // 应用偏移
-                            player.getY() + offsetY, // 应用偏移
-                            player.getZ() + offsetZ, // 应用偏移
-                            0,
-                            vx,
-                            vy,
-                            vz,
-                            0.5
+                            arrowX + (world.random.nextDouble() - 0.5) * 0.1, // 微小抖动让火团更真实
+                            arrowY + (world.random.nextDouble() - 0.5) * 0.1,
+                            arrowZ + (world.random.nextDouble() - 0.5) * 0.1,
+                            1,      // count
+                            0.02, 0.02, 0.02, // 扩散速度
+                            0.01    // 速度乘数
                     );
                 }
 
