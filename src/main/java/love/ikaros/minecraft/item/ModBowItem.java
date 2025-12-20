@@ -1,8 +1,5 @@
 package love.ikaros.minecraft.item;
 
-
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Predicate;
 
 import love.ikaros.minecraft.entity.ModTntEntity;
@@ -10,10 +7,10 @@ import love.ikaros.minecraft.sound.ModSoundEvents;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.TntEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.PersistentProjectileEntity;
 import net.minecraft.item.*;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.stat.Stats;
@@ -27,167 +24,119 @@ import net.minecraft.world.event.GameEvent;
 import org.jetbrains.annotations.Nullable;
 
 public class ModBowItem extends RangedWeaponItem implements Vanishable {
-    public static final int TICKS_PER_SECOND = 20;
-    public static final int RANGE = 20;
 
     public ModBowItem(Item.Settings settings) {
         super(settings);
     }
 
-
     @Override
     public void onStoppedUsing(ItemStack stack, World world, LivingEntity user, int remainingUseTicks) {
-        BlockPos posStart = new BlockPos(0, 0, 0);
-        BlockPos posEnd = new BlockPos(0, 0, 0);
-        if (user instanceof PlayerEntity playerEntity) {
-            boolean bl = playerEntity.getAbilities().creativeMode;
-            ItemStack itemStack = user.getStackInHand(Hand.OFF_HAND);
-            if ((!itemStack.isEmpty() && itemStack.isOf(ModItems.APOLLON_ARROWS))|| bl) {
-                if (itemStack.isEmpty()) {
-                    itemStack = new ItemStack(ModItems.APOLLON_ARROWS);
+        if (!(user instanceof PlayerEntity playerEntity)) return;
+
+        boolean isCreative = playerEntity.getAbilities().creativeMode;
+        ItemStack ammoStack = user.getStackInHand(Hand.OFF_HAND);
+
+        // 判定弹药逻辑
+        if ((!ammoStack.isEmpty() && ammoStack.isOf(ModItems.APOLLON_ARROWS)) || isCreative) {
+            if (ammoStack.isEmpty()) {
+                ammoStack = new ItemStack(ModItems.APOLLON_ARROWS);
+            }
+
+            int useDuration = this.getMaxUseTime(stack) - remainingUseTicks;
+            float f = getPullProgress(useDuration);
+
+            if (f < 0.1F) return;
+
+            if (!world.isClient) {
+                ServerWorld serverWorld = (ServerWorld) world;
+
+                // 1. 生成并射出实体箭
+                ArrowItem arrowItem = (ArrowItem) (ammoStack.getItem() instanceof ArrowItem ? ammoStack.getItem() : Items.ARROW);
+                PersistentProjectileEntity arrow = arrowItem.createArrow(world, ammoStack, playerEntity);
+
+                // 设置极高的初速度
+                arrow.setVelocity(playerEntity, playerEntity.getPitch(), playerEntity.getYaw(), 0.0F, f * 400.0F, 1.0F);
+                if (f == 1.0F) arrow.setCritical(true);
+
+                // 处理附魔逻辑
+                int power = EnchantmentHelper.getLevel(Enchantments.POWER, stack);
+                if (power > 0) arrow.setDamage(arrow.getDamage() + power * 0.5 + 0.5);
+                int punch = EnchantmentHelper.getLevel(Enchantments.PUNCH, stack);
+                if (punch > 0) arrow.setPunch(punch);
+                if (EnchantmentHelper.getLevel(Enchantments.FLAME, stack) > 0) arrow.setOnFireFor(100);
+
+                stack.damage(1, playerEntity, p -> p.sendToolBreakStatus(playerEntity.getActiveHand()));
+                if (isCreative) arrow.pickupType = PersistentProjectileEntity.PickupPermission.CREATIVE_ONLY;
+
+                world.spawnEntity(arrow);
+
+                // --- 2. 核心改进：基于向量的高密度粒子轨迹 ---
+                Vec3d startPos = playerEntity.getEyePos();
+                Vec3d lookVec = playerEntity.getRotationVec(1.0F);
+
+                // 计算射程：f=1.0时最大约800格
+                double maxParticleDist = f * 800.0;
+                int particleCount = 500;
+                double step = maxParticleDist / particleCount;
+
+                for (int i = 0; i < particleCount; i++) {
+                    Vec3d pPos = startPos.add(lookVec.multiply(i * step));
+                    serverWorld.spawnParticles(
+                            net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                            pPos.x, pPos.y, pPos.z,
+                            1, 0.02, 0.02, 0.02, 0.01
+                    );
                 }
-                int i = this.getMaxUseTime(stack) - remainingUseTicks;
-                float f = getPullProgress(i);
-                if (!(f < 0.1)) {
-                    boolean bl2 = bl && itemStack.isOf(ModItems.APOLLON_ARROWS);
-                    if (!world.isClient) {
-                        ArrowItem arrowItem = (ArrowItem)(itemStack.getItem() instanceof ArrowItem ? itemStack.getItem() : Items.ARROW);
-                        PersistentProjectileEntity persistentProjectileEntity =  arrowItem.createArrow(world, itemStack, playerEntity);
-                        persistentProjectileEntity.setVelocity(playerEntity, playerEntity.getPitch(), playerEntity.getYaw(), 0.0F, f * 400.0F, 1.0F);
-                        if (f == 1.0F) {
-                            persistentProjectileEntity.setCritical(true);
-                        }
 
-                        int j = EnchantmentHelper.getLevel(Enchantments.POWER, stack);
-                        if (j > 0) {
-                            persistentProjectileEntity.setDamage(persistentProjectileEntity.getDamage() + j * 0.5 + 0.5);
-                        }
+                // 计算逻辑终点 posEnd
+                Vec3d endVec = startPos.add(lookVec.multiply(maxParticleDist));
+                BlockPos posStart = playerEntity.getBlockPos();
+                BlockPos posEnd = new BlockPos((int) endVec.x, (int) endVec.y, (int) endVec.z);
 
-                        int k = EnchantmentHelper.getLevel(Enchantments.PUNCH, stack);
-                        if (k > 0) {
-                            persistentProjectileEntity.setPunch(k);
-                        }
+                // --- 3. TNT 链式爆炸逻辑 ---
+                if (f > 0.2F && f < 0.5F) {
+                    primeTnt(world, posEnd, playerEntity);
+                } else if (f >= 0.5F) {
+                    Vec3d direction = lookVec.normalize();
+                    double explosionInterval = 40.0;
+                    int safeDist = 52;
+                    int maxExplosions = 80;
 
-                        if (EnchantmentHelper.getLevel(Enchantments.FLAME, stack) > 0) {
-                            persistentProjectileEntity.setOnFireFor(100);
-                        }
+                    Vec3d currentTntPos = startPos.add(direction.multiply(safeDist));
+                    int spawned = 0;
+                    while (spawned < maxExplosions) {
+                        primeMaxTnt(world, new BlockPos((int) currentTntPos.x, (int) currentTntPos.y, (int) currentTntPos.z), playerEntity);
+                        currentTntPos = currentTntPos.add(direction.multiply(explosionInterval));
+                        spawned++;
 
-                        stack.damage(1, playerEntity, p -> p.sendToolBreakStatus(playerEntity.getActiveHand()));
-                        if (bl2 || playerEntity.getAbilities().creativeMode && (itemStack.isOf(Items.SPECTRAL_ARROW) || itemStack.isOf(Items.TIPPED_ARROW))) {
-                            persistentProjectileEntity.pickupType = PersistentProjectileEntity.PickupPermission.CREATIVE_ONLY;
-                        }
-
-                        world.spawnEntity(persistentProjectileEntity);
-                        int maxTime = 10;
-                        posStart = persistentProjectileEntity.getBlockPos();
-                        while (!persistentProjectileEntity.isNoClip()&&maxTime>0) {
-                            Vec3d vec3d = persistentProjectileEntity.getPos();
-
-                            // 在模拟轨迹的每个点生成灵魂火
-                            ((net.minecraft.server.world.ServerWorld)world).spawnParticles(
-                                    net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
-                                    vec3d.x, vec3d.y, vec3d.z,
-                                    5,        // 每次生成1个
-                                    0.02, 0.02, 0.02, // 极其微小的随机偏移
-                                    0.01      // 速度
-                            );
-                            int x =Double.valueOf(vec3d.getX()).intValue();
-                            int y =Double.valueOf(vec3d.getY()).intValue();
-                            int z =Double.valueOf(vec3d.getZ()).intValue();
-                            posEnd = new BlockPos(x, y, z);
-                            //System.out.println(posEnd);
-                            persistentProjectileEntity.tick();
-                            maxTime--;
-                        }
-
-                        if(0.2F<f&&f<0.5F){
-                            primeTnt(world,posEnd,playerEntity);
-                        }
-                        if(f>=0.5F){
-                            // 计算方向向量（从起点到终点）
-                            Vec3d direction = new Vec3d(
-                                    posEnd.getX() - posStart.getX(),
-                                    posEnd.getY() - posStart.getY(),
-                                    posEnd.getZ() - posStart.getZ()
-                            ).normalize();
-
-                            // 设置参数
-                            double step = 40.0;   // 每个爆炸点的间隔
-                            int safeDistance = 52; // 安全距离
-                            int maxCount = 80;     // 最大爆炸点数
-
-                            // 从起点偏移安全距离开始（加0.5让坐标居中）
-                            Vec3d currentPos = new Vec3d(
-                                    posStart.getX() + 0.5 + direction.x * safeDistance,
-                                    posStart.getY() + 0.5 + direction.y * safeDistance,
-                                    posStart.getZ() + 0.5 + direction.z * safeDistance
-                            );
-
-                            int spawned = 0;
-                            while(spawned < maxCount){
-                                // 生成TNT
-                                primeMaxTnt(world, new BlockPos(
-                                        (int)Math.floor(currentPos.x),
-                                        (int)Math.floor(currentPos.y),
-                                        (int)Math.floor(currentPos.z)
-                                ), playerEntity);
-
-                                // 向下个位置移动
-                                currentPos = currentPos.add(direction.multiply(step));
-                                spawned++;
-
-                                // 射程保护（RANGE=40时最大800格）
-                                if(currentPos.distanceTo(Vec3d.of(posStart)) > 80*(f-0.5) * step) break;
-                            }
-                            //System.out.println("zui hou"+posEnd);
-                            primeMaxTnt(world,posEnd,playerEntity);
-                        }
+                        // 动态射程保护
+                        if (currentTntPos.distanceTo(startPos) > 80 * (f - 0.5) * explosionInterval) break;
                     }
-                    if(f==1.0F){
-                        world.playSound(
-                                null,
-                                playerEntity.getX(),
-                                playerEntity.getY(),
-                                playerEntity.getZ(),
-                                ModSoundEvents.APOLLON_ARROW_SHOOT,
-                                SoundCategory.PLAYERS,
-                                1.0F,
-                                1.0F / (world.getRandom().nextFloat() * 0.4F + 1.2F) + f * 0.5F
-                        );
-                    }else {
-                        world.playSound(
-                                null,
-                                playerEntity.getX(),
-                                playerEntity.getY(),
-                                playerEntity.getZ(),
-                                SoundEvents.ENTITY_ARROW_SHOOT,
-                                SoundCategory.PLAYERS,
-                                1.0F,
-                                1.0F / (world.getRandom().nextFloat() * 0.4F + 1.2F) + f * 0.5F
-                        );
-                    }
-
-
-                    if (!bl2 && !playerEntity.getAbilities().creativeMode) {
-                        itemStack.decrement(1);
-                        if (itemStack.isEmpty()) {
-                            playerEntity.getInventory().removeOne(itemStack);
-                        }
-                    }
-
-                    playerEntity.incrementStat(Stats.USED.getOrCreateStat(this));
+                    primeMaxTnt(world, posEnd, playerEntity);
                 }
             }
+
+            // 音效处理
+            float pitch = 1.0F / (world.getRandom().nextFloat() * 0.4F + 1.2F) + f * 0.5F;
+            if (f == 1.0F) {
+                world.playSound(null, playerEntity.getX(), playerEntity.getY(), playerEntity.getZ(), ModSoundEvents.APOLLON_ARROW_SHOOT, SoundCategory.PLAYERS, 1.0F, pitch);
+            } else {
+                world.playSound(null, playerEntity.getX(), playerEntity.getY(), playerEntity.getZ(), SoundEvents.ENTITY_ARROW_SHOOT, SoundCategory.PLAYERS, 1.0F, pitch);
+            }
+
+            // 消耗弹药
+            if (!isCreative) {
+                ammoStack.decrement(1);
+                if (ammoStack.isEmpty()) playerEntity.getInventory().removeOne(ammoStack);
+            }
+            playerEntity.incrementStat(Stats.USED.getOrCreateStat(this));
         }
     }
 
     public static float getPullProgress(int useTicks) {
         float f = useTicks / 40.0F;
         f = (f * f + f * 2.0F) / 3.0F;
-        if (f > 1.0F) {
-            f = 1.0F;
-        }
-        return f;
+        return Math.min(f, 1.0F);
     }
 
     @Override
@@ -202,77 +151,47 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
             float pullProgress = getPullProgress(useDuration);
 
             if (pullProgress >= 1.0F) {
-                net.minecraft.server.world.ServerWorld serverWorld = (net.minecraft.server.world.ServerWorld) world;
-
+                ServerWorld serverWorld = (ServerWorld) world;
                 float yaw = player.getYaw();
                 float[] wingAngles = {yaw + 135f, yaw + 225f};
 
                 for (float baseAngle : wingAngles) {
-                    // 增加粒子密度
                     for (int i = 0; i < 20; i++) {
                         double radians = Math.toRadians(baseAngle);
                         double dirX = -Math.sin(radians);
                         double dirZ = Math.cos(radians);
-
-                        // --- 消失距离控制逻辑 ---
-                        // 1. 既然不能直接删掉远程粒子，我们就让粒子在 [0, 2] 格范围内随机位置生成
-                        // 2. 然后给它一个极短的寿命（SOUL_FIRE_FLAME 寿命较固定，所以我们控制速度）
-
-                        double spawnDist = world.random.nextDouble() * 2.0; // 随机分布在0-2格内
+                        double spawnDist = world.random.nextDouble() * 2.0;
                         double offsetX = dirX * spawnDist;
                         double offsetZ = dirZ * spawnDist;
-
-                        // 高度依然保持
                         double offsetY = 0.5 + world.random.nextDouble() * 1.5;
-
-                        // 速度设小一点，或者让它几乎不移动，只在原地闪烁
-                        // 这样粒子看起来就像是在 2 格范围内凭空出现并闪烁消失
-                        double speedMultiplier = 0.1;
-                        double vx = dirX * speedMultiplier;
-                        double vz = dirZ * speedMultiplier;
 
                         serverWorld.spawnParticles(
                                 net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
-                                player.getX() + offsetX,
-                                player.getY() + offsetY,
-                                player.getZ() + offsetZ,
-                                0,
-                                vx,
-                                0.02,   // 微微上升
-                                vz,
-                                0.5     // 速度系数
+                                player.getX() + offsetX, player.getY() + offsetY, player.getZ() + offsetZ,
+                                0, dirX * 0.1, 0.02, dirZ * 0.1, 0.5
                         );
                     }
                 }
 
-                // --- 2. 新增：箭头着火效果 ---
-                // 获取玩家视线方向向量 (长度为1)
+                // 箭头着火视觉效果
                 Vec3d lookVec = player.getRotationVec(1.0F);
-
-                // 计算箭头的空间坐标：
-                // 眼睛位置 + 视线方向 * 距离(约0.7格)
-                // 稍微向下偏移一点 (y - 0.2)，因为弓箭通常拿在胸口高度
-                double arrowX = player.getX() + lookVec.x * 1+0.5;
+                double arrowX = player.getX() + lookVec.x * 1 + 0.5;
                 double arrowY = player.getEyeY() + lookVec.y * 1 - 0.2;
                 double arrowZ = player.getZ() + lookVec.z * 1;
 
-                // 在箭头位置生成一小团密集的灵魂火
                 for (int j = 0; j < 5; j++) {
                     serverWorld.spawnParticles(
                             net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
-                            arrowX + (world.random.nextDouble() - 0.5) * 0.1, // 微小抖动让火团更真实
+                            arrowX + (world.random.nextDouble() - 0.5) * 0.1,
                             arrowY + (world.random.nextDouble() - 0.5) * 0.1,
                             arrowZ + (world.random.nextDouble() - 0.5) * 0.1,
-                            1,      // count
-                            0.02, 0.02, 0.02, // 扩散速度
-                            0.01    // 速度乘数
+                            1, 0.02, 0.02, 0.02, 0.01
                     );
                 }
 
                 if (world.getTime() % 4 == 0) {
                     world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                            net.minecraft.sound.SoundEvents.BLOCK_FIRE_AMBIENT,
-                            net.minecraft.sound.SoundCategory.PLAYERS, 0.5f, 2.0f);
+                            SoundEvents.BLOCK_FIRE_AMBIENT, SoundCategory.PLAYERS, 0.5f, 2.0f);
                 }
             }
         }
@@ -286,18 +205,12 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack itemStack = user.getStackInHand(hand);
-        ItemStack offHandItemStack = user.getStackInHand(Hand.OFF_HAND);
-
+        ItemStack offHand = user.getStackInHand(Hand.OFF_HAND);
         user.playSound(SoundEvents.ITEM_SPYGLASS_USE, 1.0F, 1.0F);
 
-        // user.incrementStat(Stats.USED.getOrCreateStat(this));
-
-        //boolean bl = !getProjectileType(itemStack,user).isEmpty();
-        if (!user.getAbilities().creativeMode && !offHandItemStack.isOf(ModItems.APOLLON_ARROWS)) {
-            //System.out.println("fen1");
+        if (!user.getAbilities().creativeMode && !offHand.isOf(ModItems.APOLLON_ARROWS)) {
             return TypedActionResult.fail(itemStack);
         } else {
-            //System.out.println("fen2");
             user.setCurrentHand(hand);
             return TypedActionResult.consume(itemStack);
         }
@@ -331,5 +244,4 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
             world.emitGameEvent(igniter, GameEvent.PRIME_FUSE, pos);
         }
     }
-
 }
