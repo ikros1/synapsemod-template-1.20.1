@@ -7,6 +7,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.registry.*;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import static love.ikaros.minecraft.item.ModItems.SUPER_WING;
 
 
 public class ModItemGroups {
@@ -32,6 +33,7 @@ public class ModItemGroups {
                             entries.add(ModItems.APOLLON);
                             entries.add(ModItems.HIYOLI_WAND);
                             entries.add(ModItems.NYMPH_WAND);
+                            entries.add(SUPER_WING);
                         })
                         .build());
 

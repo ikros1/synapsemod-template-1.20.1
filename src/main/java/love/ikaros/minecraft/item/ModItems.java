@@ -19,8 +19,11 @@ public class ModItems {
     public static final Item APOLLON_ARROWS = registerItems("weapon/apollon_arrows", new ArrowItem(new Item.Settings().rarity(Rarity.EPIC)));
     public static final Item CHRYSAOR_SWORD = registerItems("weapon/chrysaor_sword", new SoulBeamItem(new Item.Settings().rarity(Rarity.EPIC)));
     public static final Item APOLLON = registerItems("weapon/apollon", new ModBowItem(new Item.Settings().maxDamage(38400).rarity(Rarity.EPIC)));
-
-    // 补全法杖定义，设置稀有度为史诗
+    public static final Item SUPER_WING = registerItems("tool/super_wing",
+            new SuperWingsItem(new Item.Settings()
+                    .maxDamage(432)
+                    .rarity(Rarity.EPIC)
+            ));
     public static final Item HIYOLI_WAND = registerItems("weapon/hiyoli_wand",
             new RandomStaffItem(new Item.Settings()
                     .rarity(Rarity.EPIC)
@@ -42,6 +45,7 @@ public class ModItems {
     private static void addItemToToolItemGroup(FabricItemGroupEntries entries){
         entries.add(COMMON_CARD);
         entries.add(ALMIGHTY_CARD);
+        entries.add(SUPER_WING);
     }
 
     private static void addItemToWeaponItemGroup(FabricItemGroupEntries entries){
