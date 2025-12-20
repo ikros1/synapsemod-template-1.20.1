@@ -187,6 +187,52 @@ public class ModBowItem extends RangedWeaponItem implements Vanishable {
     }
 
     @Override
+    public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {
+        if (!world.isClient && user instanceof PlayerEntity player) {
+            int useDuration = this.getMaxUseTime(stack) - remainingUseTicks;
+            float pullProgress = getPullProgress(useDuration);
+
+            if (pullProgress >= 1.0F) {
+                net.minecraft.server.world.ServerWorld serverWorld = (net.minecraft.server.world.ServerWorld) world;
+
+                for (int i = 0; i < 8; i++) {
+                    // --- 新增：随机位置偏移 ---
+                    // 在以玩家为中心，半径约 0.5 格的范围内随机生成
+                    double offsetX = (world.random.nextDouble() - 0.5) * 0.5;
+                    double offsetZ = (world.random.nextDouble() - 0.5) * 0.5;
+                    // 稍微抬高一点点，防止粒子卡进地板
+                    double offsetY = 0.1;
+
+                    double angle = world.random.nextDouble() * 2 * Math.PI;
+                    double horizontalSpeed = 0.05 + world.random.nextDouble() * 0.12;
+
+                    double vx = Math.cos(angle) * horizontalSpeed;
+                    double vz = Math.sin(angle) * horizontalSpeed;
+                    double vy = 0.25 + world.random.nextDouble() * 0.1;
+
+                    serverWorld.spawnParticles(
+                            net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                            player.getX() + offsetX, // 应用偏移
+                            player.getY() + offsetY, // 应用偏移
+                            player.getZ() + offsetZ, // 应用偏移
+                            0,
+                            vx,
+                            vy,
+                            vz,
+                            0.5
+                    );
+                }
+
+                if (world.getTime() % 4 == 0) {
+                    world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                            net.minecraft.sound.SoundEvents.BLOCK_FIRE_AMBIENT,
+                            net.minecraft.sound.SoundCategory.PLAYERS, 0.5f, 2.0f);
+                }
+            }
+        }
+    }
+
+    @Override
     public UseAction getUseAction(ItemStack stack) {
         return UseAction.BOW;
     }
